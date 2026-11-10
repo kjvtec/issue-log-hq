@@ -32,7 +32,6 @@ import { exportIssuesToExcel } from '@/lib/excel';
 import IssueModal from '@/components/IssueModal';
 import IssueDetailModal from '@/components/IssueDetailModal';
 import DashboardView from '@/components/DashboardView';
-import KanbanView from '@/components/KanbanView';
 import initialIssuesData from '@/data/initialIssues.json';
 
 const DEFAULT_MODULES: SystemModule[] = [
@@ -56,7 +55,7 @@ const DEFAULT_TEAM: TeamMember[] = [
   { id: 1, name: 'Nat', role: 'QA / Tester' },
 ];
 
-type ActiveTab = 'dashboard' | 'table' | 'kanban';
+type ActiveTab = 'dashboard' | 'table';
 
 export default function HomePage() {
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -444,14 +443,14 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Action Buttons: Prominent vibrant + New Issue Button */}
+            {/* Action Buttons: Prominent Vibrant Orange + New Issue Button */}
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
                   setEditingIssue(null);
                   setIsModalOpen(true);
                 }}
-                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white rounded-xl text-sm font-extrabold shadow-lg shadow-emerald-500/30 border border-emerald-300/40 transition-all hover:scale-105 active:scale-95 ring-2 ring-emerald-400/30"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-sm font-extrabold shadow-lg shadow-orange-500/40 border border-orange-300/40 transition-all hover:scale-105 active:scale-95 ring-2 ring-orange-400/30"
               >
                 <Plus className="w-5 h-5 stroke-[2.5]" />
                 <span>+ แจ้งปัญหาใหม่</span>
@@ -486,18 +485,6 @@ export default function HomePage() {
               >
                 <TableIcon className="w-4 h-4" />
                 ตาราง Issue Log ({issues.length})
-              </button>
-
-              <button
-                onClick={() => setActiveTab('kanban')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                  activeTab === 'kanban'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                <Kanban className="w-4 h-4" />
-                Kanban Board
               </button>
             </div>
 
@@ -861,18 +848,6 @@ export default function HomePage() {
               </div>
             </div>
           </div>
-        )}
-
-        {/* TAB 3: KANBAN BOARD VIEW */}
-        {activeTab === 'kanban' && (
-          <KanbanView
-            issues={filteredIssues}
-            onSelectIssue={(issue) => {
-              setSelectedIssue(issue);
-              setDetailModalOpen(true);
-            }}
-            onStatusChange={handleStatusChange}
-          />
         )}
       </main>
 

@@ -116,13 +116,26 @@ export default function DashboardView({
       }
     });
 
+    const teamHierarchy: Record<string, number> = {
+      'Aoy': 1,
+      'Kampon': 2,
+      'Kraijate': 3,
+      'Tukta': 4,
+      'Nat': 5,
+    };
+
     return Object.entries(map)
       .map(([name, data]) => ({
         name,
         raised: data.raised,
         closed: data.closed,
       }))
-      .sort((a, b) => b.raised - a.raised);
+      .sort((a, b) => {
+        const rankA = teamHierarchy[a.name] || 99;
+        const rankB = teamHierarchy[b.name] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+        return b.raised - a.raised;
+      });
   }, [issues, teamMembers]);
 
   // Top High Priority Issues
