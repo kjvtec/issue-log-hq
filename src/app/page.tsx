@@ -20,12 +20,19 @@ import {
   Edit,
   Eye,
   X,
+  LayoutDashboard,
+  Table as TableIcon,
+  Kanban,
+  UserCheck,
+  Sparkles,
 } from 'lucide-react';
 import { Issue, IssueImage, PriorityType, StatusType, TeamMember, SystemModule, IssueFilter } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { exportIssuesToExcel } from '@/lib/excel';
 import IssueModal from '@/components/IssueModal';
 import IssueDetailModal from '@/components/IssueDetailModal';
+import DashboardView from '@/components/DashboardView';
+import KanbanView from '@/components/KanbanView';
 import initialIssuesData from '@/data/initialIssues.json';
 
 const DEFAULT_MODULES: SystemModule[] = [
@@ -42,16 +49,20 @@ const DEFAULT_MODULES: SystemModule[] = [
 ];
 
 const DEFAULT_TEAM: TeamMember[] = [
+  { id: 4, name: 'Kraijate', role: 'Project Lead / Developer' },
   { id: 1, name: 'Nat', role: 'QA / Tester' },
   { id: 2, name: 'Tukta', role: 'QA / Tester' },
   { id: 3, name: 'Kampon', role: 'Developer' },
 ];
+
+type ActiveTab = 'dashboard' | 'table' | 'kanban';
 
 export default function HomePage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [modules, setModules] = useState<SystemModule[]>(DEFAULT_MODULES);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(DEFAULT_TEAM);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -77,14 +88,12 @@ export default function HomePage() {
     setLoading(true);
 
     if (!isSupabaseConfigured) {
-      // Load fallback data from initial JSON
       setIssues(initialIssuesData as Issue[]);
       setLoading(false);
       return;
     }
 
     try {
-      // 1. Fetch modules & team members
       const [modulesRes, teamRes, issuesRes] = await Promise.all([
         supabase.from('modules').select('*').order('name'),
         supabase.from('team_members').select('*').order('name'),
@@ -98,13 +107,18 @@ export default function HomePage() {
         setModules(modulesRes.data);
       }
       if (teamRes.data && teamRes.data.length > 0) {
-        setTeamMembers(teamRes.data);
+        // Sort so Kraijate is first
+        const sortedTeam = [...teamRes.data].sort((a, b) => {
+          if (a.name === 'Kraijate') return -1;
+          if (b.name === 'Kraijate') return 1;
+          return a.name.localeCompare(b.name);
+        });
+        setTeamMembers(sortedTeam);
       }
 
-      if (issuesRes.data) {
+      if (issuesRes.data && issuesRes.data.length > 0) {
         setIssues(issuesRes.data as Issue[]);
       } else {
-        // If DB table is empty, display initial data
         setIssues(initialIssuesData as Issue[]);
       }
     } catch (err) {
@@ -132,11 +146,10 @@ export default function HomePage() {
     return `ISSUE_${maxNum + 1}`;
   }, [issues]);
 
-  // Handle Save (Create or Update)
+  // Handle Save
   const handleSaveIssue = async (issueData: Partial<Issue>, newImages: IssueImage[]) => {
     if (isSupabaseConfigured) {
       if (issueData.id && !issueData.id.startsWith('legacy-')) {
-        // Update existing issue in Supabase
         const { error: updateErr } = await supabase
           .from('issues')
           .update({
@@ -156,7 +169,6 @@ export default function HomePage() {
 
         if (updateErr) throw updateErr;
 
-        // Sync images: delete old and insert new ones
         await supabase.from('issue_images').delete().eq('issue_id', issueData.id);
         if (newImages.length > 0) {
           const imagesToInsert = newImages.map((img) => ({
@@ -168,7 +180,6 @@ export default function HomePage() {
           await supabase.from('issue_images').insert(imagesToInsert);
         }
       } else {
-        // Insert new issue to Supabase
         const { data: newRow, error: insertErr } = await supabase
           .from('issues')
           .insert({
@@ -189,7 +200,6 @@ export default function HomePage() {
 
         if (insertErr) throw insertErr;
 
-        // Insert images
         if (newImages.length > 0 && newRow?.id) {
           const imagesToInsert = newImages.map((img) => ({
             issue_id: newRow.id,
@@ -202,7 +212,6 @@ export default function HomePage() {
       }
       await fetchData();
     } else {
-      // Local demo mode state update
       if (issueData.id) {
         setIssues((prev) =>
           prev.map((item) =>
@@ -219,7 +228,7 @@ export default function HomePage() {
           type: issueData.type || 'Issue',
           module: issueData.module || 'General',
           details: issueData.details || '',
-          raise_by: issueData.raise_by || 'Tester',
+          raise_by: issueData.raise_by || 'Kraijate',
           raise_date: new Date().toISOString(),
           status: issueData.status || 'Open',
           resolution: issueData.resolution,
@@ -298,7 +307,6 @@ export default function HomePage() {
   const filteredIssues = useMemo(() => {
     return issues
       .filter((item) => {
-        // Search
         if (filter.search) {
           const q = filter.search.toLowerCase();
           const matchLogId = item.log_id.toLowerCase().includes(q);
@@ -309,13 +317,9 @@ export default function HomePage() {
             return false;
           }
         }
-        // Status
         if (filter.status && item.status !== filter.status) return false;
-        // Priority
         if (filter.priority && item.priority !== filter.priority) return false;
-        // Module
         if (filter.module && item.module !== filter.module) return false;
-        // Raise By
         if (filter.raise_by && item.raise_by !== filter.raise_by) return false;
 
         return true;
@@ -324,7 +328,6 @@ export default function HomePage() {
         let valA: unknown = a[sortField];
         let valB: unknown = b[sortField];
 
-        // Specific numerical sort for Log ID (e.g. ISSUE_1, ISSUE_2, ISSUE_10)
         if (sortField === 'log_id') {
           const numA = parseInt(a.log_id.replace(/\D/g, '') || '0', 10);
           const numB = parseInt(b.log_id.replace(/\D/g, '') || '0', 10);
@@ -339,17 +342,6 @@ export default function HomePage() {
         return 0;
       });
   }, [issues, filter, sortField, sortAsc]);
-
-  // Statistics
-  const stats = useMemo(() => {
-    return {
-      total: issues.length,
-      open: issues.filter((i) => i.status === 'Open').length,
-      test: issues.filter((i) => i.status === 'Test' || i.status === 'In Progress').length,
-      closed: issues.filter((i) => i.status === 'Closed').length,
-      highPriority: issues.filter((i) => i.priority === '1.High').length,
-    };
-  }, [issues]);
 
   const handleSort = (field: keyof Issue) => {
     if (sortField === field) {
@@ -382,427 +374,474 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/80 pb-16">
-      {/* Top Banner if Supabase not configured */}
-      {!isSupabaseConfigured && (
-        <div className="bg-gradient-to-r from-indigo-700 via-indigo-600 to-indigo-800 text-white px-4 py-2.5 shadow-md">
-          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-amber-300" />
-              <span>
-                <b>โหมดพรีวิวข้อมูล (31 Issues จาก Excel):</b> นำ Supabase URL & Anon Key มาใส่ใน{' '}
-                <code className="bg-black/20 px-1.5 py-0.5 rounded font-mono text-amber-200">
-                  .env.local
-                </code>{' '}
-                เพื่อเชื่อมต่อ Cloud Database & Storage สมบูรณ์แบบ
-              </span>
-            </div>
-            <a
-              href="https://supabase.com/dashboard"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 font-semibold text-amber-200 hover:text-white underline text-xs"
-            >
-              เปิด Supabase Dashboard <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-        </div>
-      )}
-
-      {/* Main Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-200">
-                  IL
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                    Issue Log HQ
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20">
+      {/* Top Navigation Bar */}
+      <nav className="bg-slate-900 text-white sticky top-0 z-30 shadow-lg border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo and Brand */}
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-black text-white shadow-md shadow-indigo-500/30 text-lg">
+                VT
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-base sm:text-lg font-bold tracking-tight text-white leading-none">
+                    Issue Tracker HQ
                   </h1>
-                  <p className="text-xs text-slate-500 font-medium">
-                    VTec Cloud HQ Tracking System • Jiffy
-                  </p>
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Supabase Live
+                  </span>
                 </div>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  VTec Cloud HQ • Jiffy Project
+                </p>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center flex-wrap gap-2.5">
-              <button
-                onClick={fetchData}
-                disabled={loading}
-                className="p-2 text-slate-600 hover:text-indigo-600 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors"
-                title="รีเฟรชข้อมูล"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
+            {/* User Profile Badge (Kraijate Spotlight) */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-xl">
+                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shadow-sm">
+                  K
+                </div>
+                <div className="hidden sm:block text-left text-xs">
+                  <span className="font-bold text-white block leading-tight">Kraijate</span>
+                  <span className="text-[10px] text-indigo-300 font-medium leading-none">Project Lead</span>
+                </div>
+              </div>
 
-              <button
-                onClick={() => exportIssuesToExcel(filteredIssues)}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-sm transition-all"
-              >
-                <Download className="w-4 h-4 text-emerald-600" />
-                Export Excel ({filteredIssues.length})
-              </button>
-
+              {/* Action Buttons */}
               <button
                 onClick={() => {
                   setEditingIssue(null);
                   setIsModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md shadow-indigo-100 transition-all hover:shadow"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md shadow-indigo-600/30 transition-all hover:scale-105"
               >
                 <Plus className="w-4 h-4" />
-                แจ้งปัญหาใหม่ (+ Issue)
+                <span className="hidden sm:inline">แจ้งปัญหาใหม่</span>
+                <span className="sm:hidden">เพิ่ม</span>
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Quick Stats Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs">
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/80 flex items-center justify-between">
-              <div>
-                <span className="text-slate-500 font-medium block">ทั้งหมด (Total)</span>
-                <span className="text-lg font-bold text-slate-800">{stats.total}</span>
-              </div>
-              <Layers className="w-5 h-5 text-slate-400" />
+        {/* View Switcher Tabs Bar */}
+        <div className="bg-slate-950/60 border-t border-slate-800/80">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="flex space-x-1 sm:space-x-3 py-2">
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'dashboard'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard สรุป
+              </button>
+
+              <button
+                onClick={() => setActiveTab('table')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'table'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <TableIcon className="w-4 h-4" />
+                ตาราง Issue Log ({issues.length})
+              </button>
+
+              <button
+                onClick={() => setActiveTab('kanban')}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                  activeTab === 'kanban'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <Kanban className="w-4 h-4" />
+                Kanban Board
+              </button>
             </div>
 
-            <div className="bg-yellow-50/70 p-3 rounded-xl border border-yellow-200/70 flex items-center justify-between">
-              <div>
-                <span className="text-yellow-800 font-medium block">Open (เปิดอยู่)</span>
-                <span className="text-lg font-bold text-yellow-900">{stats.open}</span>
-              </div>
-              <AlertCircle className="w-5 h-5 text-yellow-600" />
-            </div>
+            {/* Quick Export & Refresh */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchData}
+                disabled={loading}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                title="รีเฟรชข้อมูล"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              </button>
 
-            <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200/70 flex items-center justify-between">
-              <div>
-                <span className="text-blue-800 font-medium block">In Progress / Test</span>
-                <span className="text-lg font-bold text-blue-900">{stats.test}</span>
-              </div>
-              <Clock className="w-5 h-5 text-blue-600" />
-            </div>
-
-            <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/70 flex items-center justify-between">
-              <div>
-                <span className="text-emerald-800 font-medium block">Closed (ปิดแล้ว)</span>
-                <span className="text-lg font-bold text-emerald-900">{stats.closed}</span>
-              </div>
-              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-            </div>
-
-            <div className="bg-red-50/70 p-3 rounded-xl border border-red-200/70 flex items-center justify-between col-span-2 sm:col-span-1">
-              <div>
-                <span className="text-red-800 font-medium block">High Priority</span>
-                <span className="text-lg font-bold text-red-900">{stats.highPriority}</span>
-              </div>
-              <AlertCircle className="w-5 h-5 text-red-600" />
+              <button
+                onClick={() => exportIssuesToExcel(filteredIssues)}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 border border-emerald-500/30 rounded-lg transition-all"
+                title="ดาวน์โหลดเป็นไฟล์ Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export Excel
+              </button>
             </div>
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-4">
-        {/* Filter and Search Bar */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-          <div className="flex flex-col md:flex-row gap-3">
-            {/* Search Input */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="ค้นหา Log ID, รายละเอียด, คำอธิบาย, หรือ Remark..."
-                value={filter.search}
-                onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none placeholder:text-slate-400"
-              />
-              {filter.search && (
-                <button
-                  onClick={() => setFilter({ ...filter, search: '' })}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        {/* TAB 1: DASHBOARD VIEW */}
+        {activeTab === 'dashboard' && (
+          <DashboardView
+            issues={issues}
+            teamMembers={teamMembers}
+            modules={modules}
+            onSelectIssue={(issue) => {
+              setSelectedIssue(issue);
+              setDetailModalOpen(true);
+            }}
+            onFilterByModule={(mod) => {
+              setFilter({ ...filter, module: mod });
+              setActiveTab('table');
+            }}
+            onFilterByStatus={(st) => {
+              setFilter({ ...filter, status: st });
+              setActiveTab('table');
+            }}
+            onFilterByPriority={(pr) => {
+              setFilter({ ...filter, priority: pr });
+              setActiveTab('table');
+            }}
+            onFilterByReporter={(rep) => {
+              setFilter({ ...filter, raise_by: rep });
+              setActiveTab('table');
+            }}
+            onGoToTable={() => setActiveTab('table')}
+          />
+        )}
+
+        {/* TAB 2: TABLE VIEW (Excel-like Grid) */}
+        {activeTab === 'table' && (
+          <div className="space-y-4">
+            {/* Filter and Search Bar */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-sm space-y-3">
+              <div className="flex flex-col md:flex-row gap-3">
+                {/* Search Input */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="ค้นหา Log ID, รายละเอียด, คำอธิบาย, หรือ Remark..."
+                    value={filter.search}
+                    onChange={(e) => setFilter({ ...filter, search: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none placeholder:text-slate-400"
+                  />
+                  {filter.search && (
+                    <button
+                      onClick={() => setFilter({ ...filter, search: '' })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Dropdowns */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <select
+                    value={filter.status}
+                    onChange={(e) => setFilter({ ...filter, status: e.target.value })}
+                    className="px-3 py-2 border border-slate-300 rounded-xl outline-none bg-white font-medium text-slate-700"
+                  >
+                    <option value="">สถานะทั้งหมด</option>
+                    <option value="Open">Open</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Test">Test</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+
+                  <select
+                    value={filter.priority}
+                    onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
+                    className="px-3 py-2 border border-slate-300 rounded-xl outline-none bg-white font-medium text-slate-700"
+                  >
+                    <option value="">Priority ทั้งหมด</option>
+                    <option value="1.High">1. High</option>
+                    <option value="2.Medium">2. Medium</option>
+                    <option value="3.Low">3. Low</option>
+                  </select>
+
+                  <select
+                    value={filter.module}
+                    onChange={(e) => setFilter({ ...filter, module: e.target.value })}
+                    className="px-3 py-2 border border-slate-300 rounded-xl outline-none bg-white font-medium text-slate-700"
+                  >
+                    <option value="">Module ทั้งหมด</option>
+                    {modules.map((m) => (
+                      <option key={m.id} value={m.name}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={filter.raise_by}
+                    onChange={(e) => setFilter({ ...filter, raise_by: e.target.value })}
+                    className="px-3 py-2 border border-slate-300 rounded-xl outline-none bg-white font-medium text-slate-700 font-semibold"
+                  >
+                    <option value="">ผู้แจ้งทั้งหมด</option>
+                    {teamMembers.map((tm) => (
+                      <option key={tm.id} value={tm.name}>
+                        {tm.name} {tm.name === 'Kraijate' ? '⭐ (Lead)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Active Filter Pills */}
+              {(filter.search || filter.status || filter.priority || filter.module || filter.raise_by) && (
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                  <div className="flex flex-wrap items-center gap-1.5 text-slate-500">
+                    <span className="font-medium">ตัวกรอง:</span>
+                    {filter.module && (
+                      <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-md font-semibold">
+                        Module: {filter.module}
+                      </span>
+                    )}
+                    {filter.status && (
+                      <span className="bg-yellow-50 text-yellow-800 px-2 py-0.5 rounded-md font-semibold">
+                        Status: {filter.status}
+                      </span>
+                    )}
+                    {filter.priority && (
+                      <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded-md font-semibold">
+                        Priority: {filter.priority}
+                      </span>
+                    )}
+                    {filter.raise_by && (
+                      <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded-md font-semibold">
+                        Raise by: {filter.raise_by}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setFilter({ search: '', status: '', priority: '', module: '', raise_by: '' })
+                    }
+                    className="text-indigo-600 hover:underline font-semibold ml-auto"
+                  >
+                    ล้างตัวกรองทั้งหมด
+                  </button>
+                </div>
               )}
             </div>
 
-            {/* Filter Dropdowns */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              {/* Status Filter */}
-              <select
-                value={filter.status}
-                onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-                className="px-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-medium text-slate-700"
-              >
-                <option value="">สถานะทั้งหมด</option>
-                <option value="Open">Open</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Test">Test</option>
-                <option value="Closed">Closed</option>
-              </select>
-
-              {/* Priority Filter */}
-              <select
-                value={filter.priority}
-                onChange={(e) => setFilter({ ...filter, priority: e.target.value })}
-                className="px-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-medium text-slate-700"
-              >
-                <option value="">Priority ทั้งหมด</option>
-                <option value="1.High">1. High</option>
-                <option value="2.Medium">2. Medium</option>
-                <option value="3.Low">3. Low</option>
-              </select>
-
-              {/* Module Filter */}
-              <select
-                value={filter.module}
-                onChange={(e) => setFilter({ ...filter, module: e.target.value })}
-                className="px-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-medium text-slate-700"
-              >
-                <option value="">Module ทั้งหมด</option>
-                {modules.map((m) => (
-                  <option key={m.id} value={m.name}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* Raise By Filter */}
-              <select
-                value={filter.raise_by}
-                onChange={(e) => setFilter({ ...filter, raise_by: e.target.value })}
-                className="px-3 py-2 border border-slate-300 rounded-lg outline-none bg-white font-medium text-slate-700"
-              >
-                <option value="">ผู้แจ้งทั้งหมด</option>
-                {teamMembers.map((tm) => (
-                  <option key={tm.id} value={tm.name}>
-                    {tm.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Active Filter Pills */}
-          {(filter.search || filter.status || filter.priority || filter.module || filter.raise_by) && (
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
-              <span className="font-medium">ตัวกรองที่ใช้อยู่:</span>
-              <button
-                onClick={() =>
-                  setFilter({ search: '', status: '', priority: '', module: '', raise_by: '' })
-                }
-                className="text-indigo-600 hover:underline font-semibold ml-auto"
-              >
-                ล้างตัวกรองทั้งหมด
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Data Grid Table View */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs sm:text-sm">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-xs tracking-wider">
-                  <th
-                    onClick={() => handleSort('log_id')}
-                    className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors w-28"
-                  >
-                    <div className="flex items-center gap-1">
-                      Log ID <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('priority')}
-                    className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-24"
-                  >
-                    <div className="flex items-center gap-1">
-                      Priority <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('module')}
-                    className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-32"
-                  >
-                    <div className="flex items-center gap-1">
-                      Module <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="py-3 px-4 min-w-[280px]">รายละเอียด (Details)</th>
-                  <th className="py-3 px-2 text-center w-20">รูปภาพ</th>
-                  <th
-                    onClick={() => handleSort('raise_by')}
-                    className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-28"
-                  >
-                    <div className="flex items-center gap-1">
-                      ผู้แจ้ง <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th
-                    onClick={() => handleSort('status')}
-                    className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-28 text-center"
-                  >
-                    <div className="flex items-center justify-center gap-1">
-                      สถานะ <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                    </div>
-                  </th>
-                  <th className="py-3 px-3 w-28">ผู้ปิดงาน</th>
-                  <th className="py-3 px-4 text-right w-24">จัดการ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {loading ? (
-                  <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
-                      กำลังโหลดข้อมูล...
-                    </td>
-                  </tr>
-                ) : filteredIssues.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-500">
-                      <div className="max-w-xs mx-auto space-y-2">
-                        <HelpCircle className="w-8 h-8 text-slate-300 mx-auto" />
-                        <p className="font-medium text-slate-700">ไม่พบรายการ Issue ที่ตรงกับเงื่อนไข</p>
-                        <p className="text-xs text-slate-400">ลองปรับเปลี่ยนคำค้นหาหรือตัวกรองด้านบน</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredIssues.map((issue) => (
-                    <tr
-                      key={issue.id}
-                      onClick={() => {
-                        setSelectedIssue(issue);
-                        setDetailModalOpen(true);
-                      }}
-                      className="hover:bg-indigo-50/30 transition-colors cursor-pointer group"
-                    >
-                      {/* Log ID */}
-                      <td className="py-3 px-4 font-mono font-bold text-indigo-700 whitespace-nowrap">
-                        {issue.log_id}
-                      </td>
-
-                      {/* Priority */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border ${getPriorityStyle(
-                            issue.priority
-                          )}`}
-                        >
-                          {issue.priority}
-                        </span>
-                      </td>
-
-                      {/* Module */}
-                      <td className="py-3 px-3 font-medium text-slate-800 whitespace-nowrap">
-                        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs border border-slate-200">
-                          {issue.module}
-                        </span>
-                      </td>
-
-                      {/* Details */}
-                      <td className="py-3 px-4 max-w-md">
-                        <p className="line-clamp-2 text-xs leading-relaxed text-slate-800" title={issue.details}>
-                          {issue.details}
-                        </p>
-                      </td>
-
-                      {/* Images count badge */}
-                      <td className="py-3 px-2 text-center whitespace-nowrap">
-                        {issue.images && issue.images.length > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <ImageIcon className="w-3 h-3" />
-                            {issue.images.length}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      {/* Raise By */}
-                      <td className="py-3 px-3 whitespace-nowrap text-xs">
-                        <div className="font-medium text-slate-800">{issue.raise_by}</div>
-                        <div className="text-[10px] text-slate-400">
-                          {issue.raise_date ? new Date(issue.raise_date).toLocaleDateString('th-TH') : ''}
+            {/* Table Container */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold text-xs tracking-wider">
+                      <th
+                        onClick={() => handleSort('log_id')}
+                        className="py-3 px-4 cursor-pointer hover:bg-slate-100 transition-colors w-28"
+                      >
+                        <div className="flex items-center gap-1">
+                          Log ID <ArrowUpDown className="w-3 h-3 text-slate-400" />
                         </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusStyle(
-                            issue.status
-                          )}`}
-                        >
-                          {issue.status}
-                        </span>
-                      </td>
-
-                      {/* Closed info */}
-                      <td className="py-3 px-3 whitespace-nowrap text-xs">
-                        {issue.closed_by ? (
-                          <div>
-                            <span className="font-medium text-emerald-800">{issue.closed_by}</span>
-                            {issue.closed_version && (
-                              <span className="block text-[10px] text-slate-400">
-                                {issue.closed_version}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-
-                      {/* Action buttons */}
-                      <td className="py-3 px-4 text-right whitespace-nowrap">
-                        <div
-                          className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            onClick={() => {
-                              setSelectedIssue(issue);
-                              setDetailModalOpen(true);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                            title="ดูรายละเอียด"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingIssue(issue);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
-                            title="แก้ไข"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
+                      </th>
+                      <th
+                        onClick={() => handleSort('priority')}
+                        className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-24"
+                      >
+                        <div className="flex items-center gap-1">
+                          Priority <ArrowUpDown className="w-3 h-3 text-slate-400" />
                         </div>
-                      </td>
+                      </th>
+                      <th
+                        onClick={() => handleSort('module')}
+                        className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-32"
+                      >
+                        <div className="flex items-center gap-1">
+                          Module <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </th>
+                      <th className="py-3 px-4 min-w-[280px]">รายละเอียด (Details)</th>
+                      <th className="py-3 px-2 text-center w-20">รูปภาพ</th>
+                      <th
+                        onClick={() => handleSort('raise_by')}
+                        className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-28"
+                      >
+                        <div className="flex items-center gap-1">
+                          ผู้แจ้ง <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('status')}
+                        className="py-3 px-3 cursor-pointer hover:bg-slate-100 transition-colors w-28 text-center"
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          สถานะ <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        </div>
+                      </th>
+                      <th className="py-3 px-3 w-28">ผู้ปิดงาน</th>
+                      <th className="py-3 px-4 text-right w-24">จัดการ</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-slate-400">
+                          กำลังโหลดข้อมูล...
+                        </td>
+                      </tr>
+                    ) : filteredIssues.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-12 text-center text-slate-500">
+                          <div className="max-w-xs mx-auto space-y-2">
+                            <HelpCircle className="w-8 h-8 text-slate-300 mx-auto" />
+                            <p className="font-medium text-slate-700">ไม่พบรายการ Issue ที่ตรงกับเงื่อนไข</p>
+                            <p className="text-xs text-slate-400">ลองปรับเปลี่ยนคำค้นหาหรือตัวกรองด้านบน</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredIssues.map((issue) => (
+                        <tr
+                          key={issue.id}
+                          onClick={() => {
+                            setSelectedIssue(issue);
+                            setDetailModalOpen(true);
+                          }}
+                          className="hover:bg-indigo-50/40 transition-colors cursor-pointer group"
+                        >
+                          <td className="py-3.5 px-4 font-mono font-bold text-indigo-700 whitespace-nowrap">
+                            {issue.log_id}
+                          </td>
+                          <td className="py-3.5 px-3 whitespace-nowrap">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold border ${getPriorityStyle(
+                                issue.priority
+                              )}`}
+                            >
+                              {issue.priority}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 font-medium text-slate-800 whitespace-nowrap">
+                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs border border-slate-200">
+                              {issue.module}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 max-w-md">
+                            <p className="line-clamp-2 text-xs leading-relaxed text-slate-800" title={issue.details}>
+                              {issue.details}
+                            </p>
+                          </td>
+                          <td className="py-3.5 px-2 text-center whitespace-nowrap">
+                            {issue.images && issue.images.length > 0 ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                <ImageIcon className="w-3 h-3" />
+                                {issue.images.length}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300">-</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-3 whitespace-nowrap text-xs">
+                            <div className="font-semibold text-slate-800 flex items-center gap-1">
+                              {issue.raise_by}
+                              {issue.raise_by === 'Kraijate' && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {issue.raise_date ? new Date(issue.raise_date).toLocaleDateString('th-TH') : ''}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-3 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusStyle(
+                                issue.status
+                              )}`}
+                            >
+                              {issue.status}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-3 whitespace-nowrap text-xs">
+                            {issue.closed_by ? (
+                              <div>
+                                <span className="font-medium text-emerald-800">{issue.closed_by}</span>
+                                {issue.closed_version && (
+                                  <span className="block text-[10px] text-slate-400">
+                                    {issue.closed_version}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-300">-</span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <div
+                              className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={() => {
+                                  setSelectedIssue(issue);
+                                  setDetailModalOpen(true);
+                                }}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                                title="ดูรายละเอียด"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingIssue(issue);
+                                  setIsModalOpen(true);
+                                }}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded"
+                                title="แก้ไข"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-          {/* Footer Table Info */}
-          <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              แสดง <b>{filteredIssues.length}</b> จากทั้งหมด <b>{issues.length}</b> รายการ
-            </span>
-            <span>คลิกที่แต่ละแถวเพื่อเปิดดูรายละเอียดฉบับเต็มและรูปภาพ</span>
+              <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  แสดง <b>{filteredIssues.length}</b> จากทั้งหมด <b>{issues.length}</b> รายการ
+                </span>
+                <span>คลิกที่แต่ละแถวเพื่อเปิดดูรายละเอียดฉบับเต็มและรูปภาพ</span>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* TAB 3: KANBAN BOARD VIEW */}
+        {activeTab === 'kanban' && (
+          <KanbanView
+            issues={filteredIssues}
+            onSelectIssue={(issue) => {
+              setSelectedIssue(issue);
+              setDetailModalOpen(true);
+            }}
+            onStatusChange={handleStatusChange}
+          />
+        )}
       </main>
 
       {/* Modals */}
