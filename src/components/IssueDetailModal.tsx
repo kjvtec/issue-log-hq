@@ -56,7 +56,11 @@ export default function IssueDetailModal({
   const [closedBy, setClosedBy] = useState('');
   const [closedVersion, setClosedVersion] = useState('');
   const [remark, setRemark] = useState('');
-  const [images, setImages] = useState<IssueImage[]>([]);
+  
+  // Existing images of this issue (displayed in the main viewer)
+  const [existingImages, setExistingImages] = useState<IssueImage[]>([]);
+  // Newly attached images in this update session (starts clean and empty!)
+  const [newImages, setNewImages] = useState<IssueImage[]>([]);
 
   // Sync state when issue changes
   useEffect(() => {
@@ -65,7 +69,8 @@ export default function IssueDetailModal({
       setClosedBy(issue.closed_by || '');
       setClosedVersion(issue.closed_version || '');
       setRemark(issue.remark || '');
-      setImages(issue.images || []);
+      setExistingImages(issue.images || []);
+      setNewImages([]); // Always clean and empty on open!
       setSelectedPreviewIndex(0);
       setSaveSuccess(false);
     }
@@ -91,6 +96,7 @@ export default function IssueDetailModal({
   const handleSaveInline = async () => {
     setIsSaving(true);
     try {
+      const combinedImages = [...existingImages, ...newImages];
       await onUpdateIssue(
         issue.id,
         {
@@ -99,8 +105,10 @@ export default function IssueDetailModal({
           closed_version: closedVersion,
           remark,
         },
-        images
+        combinedImages
       );
+      setExistingImages(combinedImages);
+      setNewImages([]); // Reset newly uploaded queue after save
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -109,6 +117,21 @@ export default function IssueDetailModal({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // Delete an existing image
+  const handleDeleteExistingImage = async (indexToDelete: number) => {
+    if (!confirm('ยืนยันการลบรูปภาพนี้ออกจาก Issue หรือไม่?')) return;
+    const updated = existingImages.filter((_, idx) => idx !== indexToDelete);
+    setExistingImages(updated);
+    if (selectedPreviewIndex >= updated.length) {
+      setSelectedPreviewIndex(Math.max(0, updated.length - 1));
+    }
+    await onUpdateIssue(
+      issue.id,
+      { resolution, closed_by: closedBy, closed_version: closedVersion, remark },
+      [...updated, ...newImages]
+    );
   };
 
   const getPriorityBadge = (priority: string) => {
@@ -136,7 +159,7 @@ export default function IssueDetailModal({
     }
   };
 
-  const currentPreviewImage = images[selectedPreviewIndex] || images[0];
+  const currentPreviewImage = existingImages[selectedPreviewIndex] || existingImages[0];
 
   return (
     <>
@@ -232,21 +255,32 @@ export default function IssueDetailModal({
             </div>
 
             {/* LARGE IMAGE PREVIEW SECTION (รูปตัวอย่างขนาดใหญ่ คมชัด อ่านง่าย) */}
-            {images.length > 0 && (
+            {existingImages.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                    <span>รูปภาพหลักฐาน ({images.length} รูป)</span>
+                    <span>รูปภาพหลักฐาน ({existingImages.length} รูป)</span>
                     <span className="text-xs font-normal text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                      รูปที่ {selectedPreviewIndex + 1} จาก {images.length}
+                      รูปที่ {selectedPreviewIndex + 1} จาก {existingImages.length}
                     </span>
                   </h3>
-                  <button
-                    onClick={() => handleOpenLightbox(selectedPreviewIndex)}
-                    className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5" /> ขยายดูภาพเต็มจอ
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteExistingImage(selectedPreviewIndex)}
+                      className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-800 font-medium"
+                      title="ลบรูปนี้ออกจาก Issue"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> ลบรูปนี้
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenLightbox(selectedPreviewIndex)}
+                      className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-semibold"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" /> ขยายดูภาพเต็มจอ
+                    </button>
+                  </div>
                 </div>
 
                 {/* Big Image Viewer Container */}
@@ -264,11 +298,12 @@ export default function IssueDetailModal({
                   </div>
 
                   {/* Navigation Arrows for Big Viewer */}
-                  {images.length > 1 && (
+                  {existingImages.length > 1 && (
                     <>
                       <button
+                        type="button"
                         onClick={() =>
-                          setSelectedPreviewIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
+                          setSelectedPreviewIndex((prev) => (prev > 0 ? prev - 1 : existingImages.length - 1))
                         }
                         className="absolute left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white shadow-lg transition-transform hover:scale-110"
                         title="รูปก่อนหน้า"
@@ -276,8 +311,9 @@ export default function IssueDetailModal({
                         <ChevronLeft className="w-5 h-5" />
                       </button>
                       <button
+                        type="button"
                         onClick={() =>
-                          setSelectedPreviewIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
+                          setSelectedPreviewIndex((prev) => (prev < existingImages.length - 1 ? prev + 1 : 0))
                         }
                         className="absolute right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-black/60 hover:bg-black/80 text-white shadow-lg transition-transform hover:scale-110"
                         title="รูปถัดไป"
@@ -297,10 +333,11 @@ export default function IssueDetailModal({
                 </div>
 
                 {/* Multiple Images Thumbnail Strip */}
-                {images.length > 1 && (
+                {existingImages.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-2 pt-1">
-                    {images.map((img, idx) => (
+                    {existingImages.map((img, idx) => (
                       <button
+                        type="button"
                         key={idx}
                         onClick={() => setSelectedPreviewIndex(idx)}
                         className={`relative rounded-xl overflow-hidden border-2 flex-shrink-0 w-24 h-16 bg-slate-100 transition-all ${
@@ -366,9 +403,10 @@ export default function IssueDetailModal({
               {/* Add More Images (ImageUploader with Ctrl+V) */}
               <div className="bg-white p-3.5 rounded-xl border border-slate-200">
                 <ImageUploader
-                  images={images}
-                  onChange={setImages}
+                  images={newImages}
+                  onChange={setNewImages}
                   issueLogId={issue.log_id}
+                  title="แนบรูปภาพเพิ่มเติม (ถ้ามี)"
                 />
               </div>
 
@@ -482,11 +520,11 @@ export default function IssueDetailModal({
       </div>
 
       {/* Lightbox for full size photo zoom */}
-      {images.length > 0 && (
+      {existingImages.length > 0 && (
         <LightboxModal
           isOpen={lightboxOpen}
           onClose={() => setLightboxOpen(false)}
-          images={images}
+          images={existingImages}
           currentIndex={activeImageIndex}
           onNavigate={setActiveImageIndex}
         />

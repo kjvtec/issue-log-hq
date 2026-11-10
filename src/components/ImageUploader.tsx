@@ -10,9 +10,10 @@ interface ImageUploaderProps {
   images: IssueImage[];
   onChange: (images: IssueImage[]) => void;
   issueLogId?: string;
+  title?: string;
 }
 
-export default function ImageUploader({ images, onChange, issueLogId }: ImageUploaderProps) {
+export default function ImageUploader({ images, onChange, issueLogId, title = 'รูปภาพประกอบปัญหา' }: ImageUploaderProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -146,7 +147,7 @@ export default function ImageUploader({ images, onChange, issueLogId }: ImageUpl
       <div className="flex items-center justify-between text-sm">
         <label className="font-medium text-slate-700 flex items-center gap-1.5">
           <ImageIcon className="w-4 h-4 text-indigo-600" />
-          รูปภาพประกอบปัญหา ({images.length} รูป)
+          {title} ({images.length} รูป)
         </label>
         <span className="text-xs text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-indigo-200">
           <Clipboard className="w-3 h-3" />
