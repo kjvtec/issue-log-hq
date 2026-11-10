@@ -714,43 +714,5 @@
     "created_at": "2026-11-09T00:00:00Z",
     "updated_at": "2026-11-09T00:00:00Z",
     "images": []
-  },
-  {
-    "id": "legacy-30",
-    "log_id": "ISSUE_30",
-    "priority": "2.Medium",
-    "type": "Issue",
-    "module": "General",
-    "details": "",
-    "raise_by": "Tukta",
-    "raise_date": "2026-11-09",
-    "status": "Open",
-    "resolution": null,
-    "closed_by": null,
-    "closed_date": null,
-    "closed_version": null,
-    "remark": null,
-    "created_at": "2026-11-09T00:00:00Z",
-    "updated_at": "2026-11-09T00:00:00Z",
-    "images": []
-  },
-  {
-    "id": "legacy-31",
-    "log_id": "ISSUE_31",
-    "priority": "3.Low",
-    "type": "Issue",
-    "module": "General",
-    "details": "",
-    "raise_by": "Nat",
-    "raise_date": "2026-11-03",
-    "status": "Open",
-    "resolution": null,
-    "closed_by": null,
-    "closed_date": null,
-    "closed_version": null,
-    "remark": null,
-    "created_at": "2026-11-03T00:00:00Z",
-    "updated_at": "2026-11-03T00:00:00Z",
-    "images": []
   }
 ]
