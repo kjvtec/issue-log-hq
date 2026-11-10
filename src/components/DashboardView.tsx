@@ -138,11 +138,15 @@ export default function DashboardView({
       });
   }, [issues, teamMembers]);
 
-  // Top High Priority Issues
+  // All High Priority Issues (Ordered by Issue No ascending)
   const urgentIssues = useMemo(() => {
     return issues
       .filter((i) => i.priority.includes('High') && i.status !== 'Closed')
-      .slice(0, 5);
+      .sort((a, b) => {
+        const numA = parseInt(a.log_id.replace(/\D/g, '') || '0', 10);
+        const numB = parseInt(b.log_id.replace(/\D/g, '') || '0', 10);
+        return numA - numB;
+      });
   }, [issues]);
 
   // Recent 5 issues
@@ -190,57 +194,79 @@ export default function DashboardView({
             </div>
           </div>
 
-          {/* Right Progress Dial */}
-          <div className="bg-white/5 backdrop-blur-md rounded-2xl p-6 border border-white/10 flex items-center justify-around">
-            <div className="text-center">
-              <div className="relative inline-flex items-center justify-center">
-                <svg className="w-28 h-28 transform -rotate-90">
-                  <circle
-                    cx="56"
-                    cy="56"
-                    r="46"
-                    stroke="currentColor"
-                    strokeWidth="10"
-                    className="text-slate-700/60"
-                    fill="transparent"
-                  />
-                  <circle
-                    cx="56"
-                    cy="56"
-                    r="46"
-                    stroke="currentColor"
-                    strokeWidth="10"
-                    className="text-emerald-400 transition-all duration-1000 ease-out"
-                    fill="transparent"
-                    strokeDasharray={2 * Math.PI * 46}
-                    strokeDashoffset={
-                      2 * Math.PI * 46 - (stats.resolutionRate / 100) * (2 * Math.PI * 46)
-                    }
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute flex flex-col items-center">
-                  <span className="text-2xl font-black text-white">{stats.resolutionRate}%</span>
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider">สำเร็จ</span>
+          {/* Right Progress Gauge & Workflow Bar */}
+          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/15 flex flex-col justify-between space-y-4">
+            <div className="flex items-center justify-around gap-4">
+              <div className="text-center">
+                <div className="relative inline-flex items-center justify-center">
+                  <svg className="w-28 h-28 transform -rotate-90">
+                    <defs>
+                      <linearGradient id="heroEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#34d399" />
+                        <stop offset="100%" stopColor="#059669" />
+                      </linearGradient>
+                    </defs>
+                    <circle
+                      cx="56"
+                      cy="56"
+                      r="46"
+                      stroke="currentColor"
+                      strokeWidth="10"
+                      className="text-slate-800/80"
+                      fill="transparent"
+                    />
+                    <circle
+                      cx="56"
+                      cy="56"
+                      r="46"
+                      stroke="url(#heroEmerald)"
+                      strokeWidth="10"
+                      className="transition-all duration-1000 ease-out"
+                      fill="transparent"
+                      strokeDasharray={2 * Math.PI * 46}
+                      strokeDashoffset={
+                        2 * Math.PI * 46 - (stats.resolutionRate / 100) * (2 * Math.PI * 46)
+                      }
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute flex flex-col items-center">
+                    <span className="text-2xl font-black text-white">{stats.resolutionRate}%</span>
+                    <span className="text-[10px] text-slate-300 font-semibold uppercase tracking-wider">สำเร็จ</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 inline-block shadow-sm shadow-emerald-400/50" />
+                  <span className="text-slate-300">ปิดงานแล้ว:</span>
+                  <span className="font-extrabold text-white text-sm">{stats.closed}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 inline-block shadow-sm shadow-amber-400/50" />
+                  <span className="text-slate-300">คงค้างทั้งหมด:</span>
+                  <span className="font-extrabold text-white text-sm">{stats.open + stats.inProgress + stats.test}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block" />
+                  <span className="text-slate-300">รวมในระบบ:</span>
+                  <span className="font-extrabold text-white text-sm">{stats.total}</span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-emerald-400 inline-block shadow-sm shadow-emerald-400/50" />
-                <span className="text-slate-300">ปิดแล้ว:</span>
-                <span className="font-bold text-white text-sm">{stats.closed}</span>
+            {/* Workflow Progress Track */}
+            <div className="space-y-1.5 pt-2 border-t border-white/10">
+              <div className="flex items-center justify-between text-[11px] text-slate-300">
+                <span>อัตราความคืบหน้ารวม</span>
+                <span className="font-bold text-emerald-400">{stats.closed} / {stats.total} Issues</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-yellow-400 inline-block shadow-sm shadow-yellow-400/50" />
-                <span className="text-slate-300">รอดำเนินการ:</span>
-                <span className="font-bold text-white text-sm">{stats.open + stats.inProgress + stats.test}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block" />
-                <span className="text-slate-300">รวมทั้งหมด:</span>
-                <span className="font-bold text-white text-sm">{stats.total}</span>
+              <div className="w-full bg-slate-950/60 rounded-full h-3 p-0.5 overflow-hidden flex shadow-inner border border-white/10">
+                <div
+                  className="bg-gradient-to-r from-emerald-400 to-teal-400 h-full rounded-full transition-all duration-700 shadow-sm"
+                  style={{ width: `${stats.resolutionRate}%` }}
+                />
               </div>
             </div>
           </div>
@@ -365,41 +391,69 @@ export default function DashboardView({
             </span>
           </div>
 
-          <div className="space-y-3 pt-2">
-            {moduleBreakdown.map((item) => (
-              <div
-                key={item.name}
-                onClick={() => onFilterByModule(item.name)}
-                className="group p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-pointer"
-              >
-                <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
-                  <span className="text-slate-800 font-medium group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                    {item.name}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500">
-                      ปิดแล้ว {item.closed}/{item.total}
-                    </span>
-                    <span className="font-bold text-slate-800">{item.total} รายการ</span>
+          <div className="space-y-3.5 pt-2">
+            {moduleBreakdown.map((item) => {
+              const closedPercent = Math.round((item.closed / item.total) * 100);
+              const openPercent = 100 - closedPercent;
+
+              return (
+                <div
+                  key={item.name}
+                  onClick={() => onFilterByModule(item.name)}
+                  className="group p-3.5 rounded-2xl bg-slate-50/60 hover:bg-indigo-50/40 border border-slate-200/90 hover:border-indigo-300 transition-all cursor-pointer shadow-sm hover:shadow"
+                >
+                  <div className="flex items-center justify-between text-xs font-semibold mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 shadow-sm shadow-indigo-300" />
+                      <span className="text-slate-900 font-bold group-hover:text-indigo-600 transition-colors">
+                        {item.name}
+                      </span>
+                      {closedPercent === 100 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          ✓ ปิดครบ 100%
+                        </span>
+                      ) : closedPercent > 0 ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                          สำเร็จ {closedPercent}%
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                          รอแก้ไข {item.open}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="text-slate-500 font-medium">
+                        <b className="text-emerald-600 font-bold">{item.closed}</b> ปิด / <b className="text-amber-600 font-bold">{item.open}</b> ค้าง
+                      </span>
+                      <span className="font-extrabold text-slate-800 bg-white px-2 py-0.5 rounded-md border border-slate-200 shadow-2xs">
+                        {item.total} ทั้งหมด
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Modern High-Impact Progress Bar */}
+                  <div className="relative w-full bg-slate-200/80 rounded-full h-3.5 p-0.5 overflow-hidden flex shadow-inner">
+                    {item.closed > 0 && (
+                      <div
+                        className="bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 h-full rounded-l-full transition-all duration-700 shadow-sm relative group-hover:brightness-105"
+                        style={{ width: `${closedPercent}%` }}
+                        title={`ปิดแล้ว: ${item.closed} (${closedPercent}%)`}
+                      />
+                    )}
+                    {item.open > 0 && (
+                      <div
+                        className={`bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 h-full transition-all duration-700 shadow-sm relative group-hover:brightness-105 ${
+                          item.closed === 0 ? 'rounded-full' : 'rounded-r-full'
+                        }`}
+                        style={{ width: `${openPercent}%` }}
+                        title={`ค้าง: ${item.open} (${openPercent}%)`}
+                      />
+                    )}
                   </div>
                 </div>
-
-                {/* Progress bar */}
-                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
-                  <div
-                    className="bg-emerald-500 h-2 transition-all duration-300"
-                    style={{ width: `${(item.closed / item.total) * 100}%` }}
-                    title={`ปิดแล้ว: ${item.closed}`}
-                  />
-                  <div
-                    className="bg-yellow-400 h-2 transition-all duration-300"
-                    style={{ width: `${(item.open / item.total) * 100}%` }}
-                    title={`คงค้าง: ${item.open}`}
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -481,38 +535,58 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* Urgent / High Priority Section */}
+      {/* Urgent / High Priority Section - ALL High Priority Issues Ordered by Issue No */}
       {urgentIssues.length > 0 && (
-        <div className="bg-red-50/40 rounded-2xl p-6 border border-red-200/80 shadow-sm space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-red-900 flex items-center gap-2">
-              <Flame className="w-4 h-4 text-red-600" />
-              High Priority Issues ที่ยังเปิดอยู่ (ต้องการความสนใจด่วน)
-            </h3>
-            <span className="text-xs text-red-600 font-semibold">{urgentIssues.length} รายการ</span>
+        <div className="bg-red-50/50 rounded-2xl p-6 border-2 border-red-200/90 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h3 className="text-sm sm:text-base font-extrabold text-red-950 flex items-center gap-2">
+                <Flame className="w-5 h-5 text-red-600 animate-pulse" />
+                High Priority Issues ที่ยังเปิดอยู่ (แสดงทั้งหมด เรียงตาม Issue No)
+              </h3>
+              <p className="text-xs text-red-700/90">
+                รายการปัญหาสำคัญระดับสูงที่รอการแก้ไข เรียงลำดับจากรหัสเริ่มต้นถึงล่าสุด
+              </p>
+            </div>
+            <span className="text-xs font-bold text-red-700 bg-red-100/90 border border-red-300 px-3 py-1 rounded-full self-start sm:self-auto shadow-2xs">
+              พบ {urgentIssues.length} รายการ
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {urgentIssues.map((issue) => (
               <div
                 key={issue.id}
                 onClick={() => onSelectIssue(issue)}
-                className="bg-white p-4 rounded-xl border border-red-200 hover:border-red-400 shadow-sm hover:shadow transition-all cursor-pointer space-y-2"
+                className="bg-white p-4 rounded-xl border border-red-200 hover:border-red-400 shadow-sm hover:shadow-md transition-all cursor-pointer space-y-2.5 group"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded border border-red-200">
+                  <span className="font-mono text-xs font-extrabold text-red-700 bg-red-50 px-2.5 py-0.5 rounded-lg border border-red-200 group-hover:bg-red-600 group-hover:text-white transition-colors">
                     {issue.log_id}
                   </span>
-                  <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                    {issue.module}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {issue.images && issue.images.length > 0 && (
+                      <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <ImageIcon className="w-2.5 h-2.5 text-indigo-500" />
+                        {issue.images.length}
+                      </span>
+                    )}
+                    <span className="text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                      {issue.module}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xs text-slate-800 line-clamp-2 leading-relaxed font-medium">
+                <p className="text-xs text-slate-800 line-clamp-2 leading-relaxed font-semibold">
                   {issue.details}
                 </p>
-                <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1 border-t border-slate-100">
-                  <span>โดย: {issue.raise_by}</span>
-                  <span className="text-amber-600 font-medium">{issue.status}</span>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                  <span className="flex items-center gap-1">
+                    <User className="w-3 h-3 text-slate-400" />
+                    โดย: {issue.raise_by}
+                  </span>
+                  <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                    {issue.status}
+                  </span>
                 </div>
               </div>
             ))}
