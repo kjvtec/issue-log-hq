@@ -390,7 +390,7 @@ export default function DashboardView({
           </div>
         </div>
 
-        {/* Team Collaboration & Kampon Spotlight */}
+        {/* Team Collaboration */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -410,7 +410,7 @@ export default function DashboardView({
                 key={tm.name}
                 onClick={() => onFilterByReporter(tm.name)}
                 className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                  tm.name === 'Kampon'
+                  tm.name === 'Aoy' || tm.name === 'Kampon'
                     ? 'bg-gradient-to-r from-indigo-50/70 to-purple-50/70 border-indigo-200 shadow-sm'
                     : 'bg-slate-50/60 hover:bg-slate-100/60 border-slate-200/80'
                 }`}
@@ -419,7 +419,9 @@ export default function DashboardView({
                   <div className="flex items-center gap-2.5">
                     <div
                       className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-xs ${
-                        tm.name === 'Kampon'
+                        tm.name === 'Aoy'
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-300'
+                          : tm.name === 'Kampon'
                           ? 'bg-indigo-600 text-white shadow-md shadow-indigo-300'
                           : 'bg-slate-200 text-slate-700'
                       }`}
@@ -429,9 +431,14 @@ export default function DashboardView({
                     <div>
                       <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
                         {tm.name}
+                        {tm.name === 'Aoy' && (
+                          <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-semibold">
+                            Project Lead
+                          </span>
+                        )}
                         {tm.name === 'Kampon' && (
                           <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-semibold">
-                            Lead
+                            QA Lead
                           </span>
                         )}
                       </div>

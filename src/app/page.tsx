@@ -49,10 +49,11 @@ const DEFAULT_MODULES: SystemModule[] = [
 ];
 
 const DEFAULT_TEAM: TeamMember[] = [
-  { id: 3, name: 'Kampon', role: 'Project Lead / Developer' },
-  { id: 4, name: 'Kraijate', role: 'Developer' },
-  { id: 1, name: 'Nat', role: 'QA / Tester' },
+  { id: 5, name: 'Aoy', role: 'Project Lead' },
+  { id: 3, name: 'Kampon', role: 'QA / Lead' },
+  { id: 4, name: 'Kraijate', role: 'QA / Tester' },
   { id: 2, name: 'Tukta', role: 'QA / Tester' },
+  { id: 1, name: 'Nat', role: 'QA / Tester' },
 ];
 
 type ActiveTab = 'dashboard' | 'table' | 'kanban';
@@ -107,11 +108,17 @@ export default function HomePage() {
         setModules(modulesRes.data);
       }
       if (teamRes.data && teamRes.data.length > 0) {
-        // Sort so Kampon is first
+        const priorityOrder: Record<string, number> = {
+          'Aoy': 1,
+          'Kampon': 2,
+          'Kraijate': 3,
+          'Tukta': 4,
+          'Nat': 5,
+        };
         const sortedTeam = [...teamRes.data].sort((a, b) => {
-          if (a.name === 'Kampon') return -1;
-          if (b.name === 'Kampon') return 1;
-          return a.name.localeCompare(b.name);
+          const ordA = priorityOrder[a.name] || 99;
+          const ordB = priorityOrder[b.name] || 99;
+          return ordA - ordB;
         });
         setTeamMembers(sortedTeam);
       }
@@ -428,44 +435,26 @@ export default function HomePage() {
                 VT
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-bold tracking-tight text-white leading-none">
-                    Issue Tracker HQ
-                  </h1>
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Supabase Live
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-medium">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight text-white leading-none">
+                  Issue Tracker HQ
+                </h1>
+                <p className="text-[11px] text-slate-400 font-medium mt-1">
                   VTec Cloud HQ • Jiffy Project
                 </p>
               </div>
             </div>
 
-            {/* User Profile Badge (Kampon Spotlight) */}
+            {/* Action Buttons: Prominent vibrant + New Issue Button */}
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-xl">
-                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shadow-sm">
-                  K
-                </div>
-                <div className="hidden sm:block text-left text-xs">
-                  <span className="font-bold text-white block leading-tight">Kampon</span>
-                  <span className="text-[10px] text-indigo-300 font-medium leading-none">Project Lead</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
               <button
                 onClick={() => {
                   setEditingIssue(null);
                   setIsModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md shadow-indigo-600/30 transition-all hover:scale-105"
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white rounded-xl text-sm font-extrabold shadow-lg shadow-emerald-500/30 border border-emerald-300/40 transition-all hover:scale-105 active:scale-95 ring-2 ring-emerald-400/30"
               >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">แจ้งปัญหาใหม่</span>
-                <span className="sm:hidden">เพิ่ม</span>
+                <Plus className="w-5 h-5 stroke-[2.5]" />
+                <span>+ แจ้งปัญหาใหม่</span>
               </button>
             </div>
           </div>
