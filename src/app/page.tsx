@@ -49,10 +49,10 @@ const DEFAULT_MODULES: SystemModule[] = [
 ];
 
 const DEFAULT_TEAM: TeamMember[] = [
-  { id: 4, name: 'Kraijate', role: 'Project Lead / Developer' },
+  { id: 3, name: 'Kampon', role: 'Project Lead / Developer' },
+  { id: 4, name: 'Kraijate', role: 'Developer' },
   { id: 1, name: 'Nat', role: 'QA / Tester' },
   { id: 2, name: 'Tukta', role: 'QA / Tester' },
-  { id: 3, name: 'Kampon', role: 'Developer' },
 ];
 
 type ActiveTab = 'dashboard' | 'table' | 'kanban';
@@ -107,10 +107,10 @@ export default function HomePage() {
         setModules(modulesRes.data);
       }
       if (teamRes.data && teamRes.data.length > 0) {
-        // Sort so Kraijate is first
+        // Sort so Kampon is first
         const sortedTeam = [...teamRes.data].sort((a, b) => {
-          if (a.name === 'Kraijate') return -1;
-          if (b.name === 'Kraijate') return 1;
+          if (a.name === 'Kampon') return -1;
+          if (b.name === 'Kampon') return 1;
           return a.name.localeCompare(b.name);
         });
         setTeamMembers(sortedTeam);
@@ -271,6 +271,49 @@ export default function HomePage() {
     }
   };
 
+  // Inline Update from Detail Modal
+  const handleInlineUpdateIssue = async (
+    issueId: string,
+    updates: Partial<Issue>,
+    newImages: IssueImage[]
+  ) => {
+    if (isSupabaseConfigured && !issueId.startsWith('legacy-') && !issueId.startsWith('local-')) {
+      const { error: updateErr } = await supabase
+        .from('issues')
+        .update(updates)
+        .eq('id', issueId);
+
+      if (updateErr) throw updateErr;
+
+      // Sync images in issue_images table
+      await supabase.from('issue_images').delete().eq('issue_id', issueId);
+      if (newImages.length > 0) {
+        const imagesToInsert = newImages.map((img) => ({
+          issue_id: issueId,
+          file_url: img.file_url,
+          file_name: img.file_name,
+          file_size: img.file_size || 0,
+        }));
+        await supabase.from('issue_images').insert(imagesToInsert);
+      }
+      await fetchData();
+    } else {
+      setIssues((prev) =>
+        prev.map((item) =>
+          item.id === issueId
+            ? ({ ...item, ...updates, images: newImages } as Issue)
+            : item
+        )
+      );
+    }
+
+    if (selectedIssue && selectedIssue.id === issueId) {
+      setSelectedIssue((prev) =>
+        prev ? ({ ...prev, ...updates, images: newImages } as Issue) : null
+      );
+    }
+  };
+
   // Delete Issue
   const handleDeleteIssue = async (issueId: string) => {
     if (isSupabaseConfigured && !issueId.startsWith('legacy-') && !issueId.startsWith('local-')) {
@@ -400,14 +443,14 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* User Profile Badge (Kraijate Spotlight) */}
+            {/* User Profile Badge (Kampon Spotlight) */}
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-xl">
                 <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xs text-white shadow-sm">
                   K
                 </div>
                 <div className="hidden sm:block text-left text-xs">
-                  <span className="font-bold text-white block leading-tight">Kraijate</span>
+                  <span className="font-bold text-white block leading-tight">Kampon</span>
                   <span className="text-[10px] text-indigo-300 font-medium leading-none">Project Lead</span>
                 </div>
               </div>
@@ -874,6 +917,8 @@ export default function HomePage() {
         }}
         onDelete={handleDeleteIssue}
         onStatusChange={handleStatusChange}
+        onUpdateIssue={handleInlineUpdateIssue}
+        teamMembers={teamMembers}
       />
     </div>
   );
