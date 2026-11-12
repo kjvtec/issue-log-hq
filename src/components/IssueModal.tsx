@@ -1,8 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Save, AlertCircle, PlusCircle, Lock } from 'lucide-react';
-import { Issue, IssueImage, PriorityType, StatusType, TeamMember, SystemModule } from '@/types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Save, PlusCircle, Lock, FolderTree } from 'lucide-react';
+import {
+  CORE_FUNCTIONS,
+  CoreFunctionType,
+  DEFAULT_CORE_FUNCTION,
+  DEFAULT_MODULES_BY_CORE,
+  Issue,
+  IssueImage,
+  PriorityType,
+  StatusType,
+  TeamMember,
+  SystemModule,
+} from '@/types';
 import ImageUploader from './ImageUploader';
 
 interface IssueModalProps {
@@ -11,9 +22,12 @@ interface IssueModalProps {
   onSave: (issueData: Partial<Issue>, images: IssueImage[]) => Promise<void>;
   initialData?: Issue | null;
   suggestedLogId?: string;
+  defaultCoreFunction?: CoreFunctionType | string;
+  defaultModule?: string;
+  defaultPriority?: PriorityType;
   modules: SystemModule[];
   teamMembers: TeamMember[];
-  onAddModule?: (name: string) => Promise<void>;
+  onAddModule?: (name: string, coreFunction: CoreFunctionType | string) => Promise<void>;
   onAddTeamMember?: (name: string) => Promise<void>;
 }
 
@@ -23,6 +37,9 @@ export default function IssueModal({
   onSave,
   initialData,
   suggestedLogId = 'ISSUE_1',
+  defaultCoreFunction,
+  defaultModule,
+  defaultPriority,
   modules,
   teamMembers,
   onAddModule,
@@ -31,6 +48,7 @@ export default function IssueModal({
   const [logId, setLogId] = useState('');
   const [priority, setPriority] = useState<PriorityType>('2.Medium');
   const [type, setType] = useState('Issue');
+  const [coreFunction, setCoreFunction] = useState<CoreFunctionType | string>(DEFAULT_CORE_FUNCTION);
   const [module, setModule] = useState('');
   const [details, setDetails] = useState('');
   const [raiseBy, setRaiseBy] = useState('');
@@ -46,11 +64,29 @@ export default function IssueModal({
   const [newMemberName, setNewMemberName] = useState('');
   const [showAddMember, setShowAddMember] = useState(false);
 
+  // Merge DB modules for the active Core Function with fallback defaults
+  const availableModules = useMemo(() => {
+    const set = new Set<string>();
+    const defaults = DEFAULT_MODULES_BY_CORE[coreFunction as CoreFunctionType] || [];
+    defaults.forEach((m) => set.add(m));
+
+    modules.forEach((m) => {
+      const mCore = m.core_function || DEFAULT_CORE_FUNCTION;
+      if (mCore === coreFunction) {
+        set.add(m.name);
+      }
+    });
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [modules, coreFunction]);
+
   useEffect(() => {
     if (initialData) {
+      const initCore = initialData.core_function || DEFAULT_CORE_FUNCTION;
       setLogId(initialData.log_id || '');
       setPriority((initialData.priority as PriorityType) || '2.Medium');
       setType(initialData.type || 'Issue');
+      setCoreFunction(initCore);
       setModule(initialData.module || '');
       setDetails(initialData.details || '');
       setRaiseBy(initialData.raise_by || '');
@@ -61,12 +97,15 @@ export default function IssueModal({
       setRemark(initialData.remark || '');
       setImages(initialData.images || []);
     } else {
+      const initCore = (defaultCoreFunction as CoreFunctionType) || DEFAULT_CORE_FUNCTION;
+      const fallbackMods = DEFAULT_MODULES_BY_CORE[initCore] || [];
       setLogId(suggestedLogId);
-      setPriority('2.Medium');
+      setPriority(defaultPriority || '2.Medium');
       setType('Issue');
-      setModule(modules[0]?.name || 'Shop');
+      setCoreFunction(initCore);
+      setModule(defaultModule || fallbackMods[0] || modules[0]?.name || 'General');
       setDetails('');
-      setRaiseBy(teamMembers[0]?.name || 'Nat');
+      setRaiseBy(teamMembers[0]?.name || 'Aoy');
       setStatus('Open');
       setResolution('');
       setClosedBy('');
@@ -74,7 +113,23 @@ export default function IssueModal({
       setRemark('');
       setImages([]);
     }
-  }, [initialData, suggestedLogId, modules, teamMembers, isOpen]);
+    setShowAddModule(false);
+    setShowAddMember(false);
+  }, [initialData, suggestedLogId, defaultCoreFunction, defaultModule, defaultPriority, modules, teamMembers, isOpen]);
+
+  const handleCoreFunctionChange = (nextCore: string) => {
+    setCoreFunction(nextCore);
+    const defaultsForNext = DEFAULT_MODULES_BY_CORE[nextCore as CoreFunctionType] || [];
+    const dbForNext = modules
+      .filter((m) => (m.core_function || DEFAULT_CORE_FUNCTION) === nextCore)
+      .map((m) => m.name);
+    const merged = Array.from(new Set([...defaultsForNext, ...dbForNext])).sort((a, b) =>
+      a.localeCompare(b)
+    );
+    if (!merged.includes(module)) {
+      setModule(merged[0] || '');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -84,8 +139,12 @@ export default function IssueModal({
       alert('กรุณากรอกรายละเอียดปัญหา (Details)');
       return;
     }
+    if (!coreFunction) {
+      alert('กรุณาเลือก Core Function (กลุ่มหลัก)');
+      return;
+    }
     if (!module) {
-      alert('กรุณาเลือกโมดูล');
+      alert('กรุณาเลือก Module (กลุ่มย่อย)');
       return;
     }
     if (!raiseBy) {
@@ -101,6 +160,7 @@ export default function IssueModal({
           log_id: logId,
           priority,
           type,
+          core_function: coreFunction,
           module,
           details,
           raise_by: raiseBy,
@@ -123,7 +183,7 @@ export default function IssueModal({
 
   const handleCreateModule = async () => {
     if (!newModuleName.trim() || !onAddModule) return;
-    await onAddModule(newModuleName.trim());
+    await onAddModule(newModuleName.trim(), coreFunction);
     setModule(newModuleName.trim());
     setNewModuleName('');
     setShowAddModule(false);
@@ -169,7 +229,7 @@ export default function IssueModal({
                   Log ID *
                 </label>
                 <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium border border-slate-200">
-                  ระบบกำหนดอัตโนมัติ (ห้ามแก้)
+                  ระบบกำหนด (ห้ามแก้)
                 </span>
               </div>
               <input
@@ -216,6 +276,7 @@ export default function IssueModal({
                 className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none font-medium"
               >
                 <option value="Open">Open (เปิดแจ้ง)</option>
+                <option value="Need Info">Need Info (Dev ขอข้อมูลเพิ่ม)</option>
                 <option value="In Progress">In Progress (กำลังแก้ไข)</option>
                 <option value="Test">Test (พร้อมทดสอบ)</option>
                 <option value="Closed">Closed (ปิดงานแล้ว)</option>
@@ -223,20 +284,41 @@ export default function IssueModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Module */}
+          {/* Core Function & Module Grouping Box */}
+          <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-200/80 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Core Function (กลุ่มหลัก) */}
+            <div>
+              <label className="block text-xs font-bold text-indigo-900 mb-1 flex items-center gap-1.5">
+                <FolderTree className="w-3.5 h-3.5 text-indigo-600" />
+                Core Function (กลุ่มหลัก) *
+              </label>
+              <select
+                value={coreFunction}
+                onChange={(e) => handleCoreFunctionChange(e.target.value)}
+                required
+                className="w-full px-3 py-2 text-sm font-semibold text-slate-800 bg-white border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              >
+                {CORE_FUNCTIONS.map((cf, index) => (
+                  <option key={cf} value={cf}>
+                    {index + 1}. {cf}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Module (กลุ่มย่อย) */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-600">
-                  Module (ระบบย่อย) *
+                <label className="block text-xs font-bold text-indigo-900">
+                  Module (กลุ่มย่อยใน {coreFunction}) *
                 </label>
                 {onAddModule && (
                   <button
                     type="button"
                     onClick={() => setShowAddModule(!showAddModule)}
-                    className="text-[11px] text-indigo-600 hover:underline flex items-center gap-0.5"
+                    className="text-[11px] text-indigo-600 hover:underline flex items-center gap-0.5 font-semibold"
                   >
-                    <PlusCircle className="w-3 h-3" /> เพิ่มใหม่
+                    <PlusCircle className="w-3 h-3" /> เพิ่มกลุ่มย่อยใหม่
                   </button>
                 )}
               </div>
@@ -244,15 +326,15 @@ export default function IssueModal({
                 <div className="flex gap-1">
                   <input
                     type="text"
-                    placeholder="พิมพ์ชื่อ Module..."
+                    placeholder={`ชื่อกลุ่มย่อยใน ${coreFunction}...`}
                     value={newModuleName}
                     onChange={(e) => setNewModuleName(e.target.value)}
-                    className="flex-1 px-2.5 py-1.5 text-xs border border-indigo-300 rounded-lg outline-none"
+                    className="flex-1 px-2.5 py-2 text-xs border border-indigo-300 rounded-lg outline-none bg-white"
                   />
                   <button
                     type="button"
                     onClick={handleCreateModule}
-                    className="px-2.5 py-1 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    className="px-3 py-1 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold"
                   >
                     เพิ่ม
                   </button>
@@ -262,17 +344,22 @@ export default function IssueModal({
                   value={module}
                   onChange={(e) => setModule(e.target.value)}
                   required
-                  className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                  className="w-full px-3 py-2 text-sm font-medium text-slate-800 bg-white border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                 >
-                  {modules.map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name}
+                  {availableModules.map((mName) => (
+                    <option key={mName} value={mName}>
+                      {mName}
                     </option>
                   ))}
+                  {module && !availableModules.includes(module) && (
+                    <option value={module}>{module}</option>
+                  )}
                 </select>
               )}
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Raise By */}
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -340,6 +427,15 @@ export default function IssueModal({
             </div>
           </div>
 
+          {/* Image Uploader */}
+          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200">
+            <ImageUploader
+              images={images}
+              onChange={setImages}
+              issueLogId={logId}
+            />
+          </div>
+
           {/* Details */}
           <div>
             <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -355,16 +451,7 @@ export default function IssueModal({
             />
           </div>
 
-          {/* Image Uploader */}
-          <div className="bg-slate-50/70 p-4 rounded-xl border border-slate-200">
-            <ImageUploader
-              images={images}
-              onChange={setImages}
-              issueLogId={logId}
-            />
-          </div>
-
-          {/* Resolution & Closing Information (collapsible or displayed) */}
+          {/* Resolution & Closing Information */}
           <div className="p-4 bg-slate-50/70 rounded-xl border border-slate-200 space-y-4">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               ข้อมูลการแก้ไข & การปิดงาน (Developer / Resolution Note)

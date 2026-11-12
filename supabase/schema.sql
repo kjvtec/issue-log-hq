@@ -5,8 +5,10 @@
 -- 1. Create tables
 CREATE TABLE IF NOT EXISTS public.modules (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) UNIQUE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    core_function VARCHAR(100) NOT NULL DEFAULT 'VTec Cloud HQ',
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (core_function, name)
 );
 
 CREATE TABLE IF NOT EXISTS public.team_members (
@@ -21,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.issues (
     log_id VARCHAR(50) UNIQUE NOT NULL,
     priority VARCHAR(20) NOT NULL DEFAULT '2.Medium',
     type VARCHAR(50) NOT NULL DEFAULT 'Issue',
+    core_function VARCHAR(100) NOT NULL DEFAULT 'VTec Cloud HQ',
     module VARCHAR(100) NOT NULL,
     details TEXT NOT NULL,
     raise_by VARCHAR(100) NOT NULL,
@@ -47,6 +50,7 @@ CREATE TABLE IF NOT EXISTS public.issue_images (
 -- Indexing for performance
 CREATE INDEX IF NOT EXISTS idx_issues_status ON public.issues(status);
 CREATE INDEX IF NOT EXISTS idx_issues_priority ON public.issues(priority);
+CREATE INDEX IF NOT EXISTS idx_issues_core_function ON public.issues(core_function);
 CREATE INDEX IF NOT EXISTS idx_issues_module ON public.issues(module);
 CREATE INDEX IF NOT EXISTS idx_issues_raise_date ON public.issues(raise_date DESC);
 CREATE INDEX IF NOT EXISTS idx_issue_images_issue_id ON public.issue_images(issue_id);
@@ -67,18 +71,50 @@ FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
 -- 2. Seed Default Modules & Team Members
-INSERT INTO public.modules (name) VALUES
-    ('Cash In/Cash Out'),
-    ('Global Setting'),
-    ('Login'),
-    ('Payment'),
-    ('Price'),
-    ('Product'),
-    ('Reason code'),
-    ('Salemode'),
-    ('Shop'),
-    ('Staff')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO public.modules (core_function, name) VALUES
+    ('VTec POS', 'Login'),
+    ('VTec POS', 'Sale / Checkout'),
+    ('VTec POS', 'Payment'),
+    ('VTec POS', 'Promotion / Discount'),
+    ('VTec POS', 'Cash In/Cash Out'),
+    ('VTec POS', 'Shift / Close Day'),
+    ('VTec POS', 'Receipt / Tax Invoice'),
+    ('VTec POS', 'Hardware / Printer'),
+    ('VTec Store Backoffice', 'Login'),
+    ('VTec Store Backoffice', 'Cash In/Cash Out'),
+    ('VTec Store Backoffice', 'Shift / End of Day'),
+    ('VTec Store Backoffice', 'Product / Price'),
+    ('VTec Store Backoffice', 'Stock / Inventory'),
+    ('VTec Store Backoffice', 'Goods Receive'),
+    ('VTec Store Backoffice', 'Staff / Permission'),
+    ('VTec Store Backoffice', 'Report'),
+    ('VTec Store Backoffice', 'Store Setting'),
+    ('VTec HHT', 'Login'),
+    ('VTec HHT', 'Stock Count'),
+    ('VTec HHT', 'Goods Receive'),
+    ('VTec HHT', 'Price Check'),
+    ('VTec HHT', 'Transfer'),
+    ('VTec HHT', 'Return / Wastage'),
+    ('VTec HHT', 'Sync Data'),
+    ('VTec Cloud Inventory', 'Purchase Order'),
+    ('VTec Cloud Inventory', 'Goods Receive'),
+    ('VTec Cloud Inventory', 'Stock Transfer'),
+    ('VTec Cloud Inventory', 'Stock Adjustment'),
+    ('VTec Cloud Inventory', 'Physical Count'),
+    ('VTec Cloud Inventory', 'Stock Movement'),
+    ('VTec Cloud Inventory', 'Warehouse Setting'),
+    ('VTec Cloud Inventory', 'Inventory Report'),
+    ('VTec Cloud HQ', 'Cash In/Cash Out'),
+    ('VTec Cloud HQ', 'Global Setting'),
+    ('VTec Cloud HQ', 'Login'),
+    ('VTec Cloud HQ', 'Payment'),
+    ('VTec Cloud HQ', 'Price'),
+    ('VTec Cloud HQ', 'Product'),
+    ('VTec Cloud HQ', 'Reason code'),
+    ('VTec Cloud HQ', 'Salemode'),
+    ('VTec Cloud HQ', 'Shop'),
+    ('VTec Cloud HQ', 'Staff')
+ON CONFLICT (core_function, name) DO NOTHING;
 
 INSERT INTO public.team_members (name, role) VALUES
     ('Nat', 'QA / Tester'),

@@ -12,6 +12,7 @@ interface KanbanViewProps {
 
 const COLUMNS: { id: StatusType; label: string; color: string; badge: string }[] = [
   { id: 'Open', label: 'Open', color: 'border-yellow-300 bg-yellow-50/50', badge: 'bg-yellow-100 text-yellow-800' },
+  { id: 'Need Info', label: 'Need Info', color: 'border-orange-300 bg-orange-50/50', badge: 'bg-orange-100 text-orange-800' },
   { id: 'In Progress', label: 'In Progress', color: 'border-purple-300 bg-purple-50/50', badge: 'bg-purple-100 text-purple-800' },
   { id: 'Test', label: 'Ready for Test', color: 'border-blue-300 bg-blue-50/50', badge: 'bg-blue-100 text-blue-800' },
   { id: 'Closed', label: 'Closed', color: 'border-emerald-300 bg-emerald-50/50', badge: 'bg-emerald-100 text-emerald-800' },
@@ -23,7 +24,7 @@ export default function KanbanView({
   onStatusChange,
 }: KanbanViewProps) {
   const getNextStatus = (current: StatusType): StatusType | null => {
-    if (current === 'Open') return 'In Progress';
+    if (current === 'Open' || current === 'Need Info') return 'In Progress';
     if (current === 'In Progress') return 'Test';
     if (current === 'Test') return 'Closed';
     return null;
@@ -36,7 +37,7 @@ export default function KanbanView({
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
       {COLUMNS.map((col) => {
         const colIssues = issues.filter((i) => i.status === col.id);
 
