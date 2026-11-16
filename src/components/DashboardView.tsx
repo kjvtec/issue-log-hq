@@ -21,6 +21,7 @@ import {
   HelpCircle,
   Send,
   ListOrdered,
+  Sparkles,
 } from 'lucide-react';
 import {
   Issue,
@@ -33,6 +34,7 @@ import {
   DEFAULT_MODULES_BY_CORE,
 } from '@/types';
 import { getLatestTimelineInfo } from '@/lib/timeline';
+import { parseIssueNumber } from '@/lib/issueSort';
 
 interface DashboardViewProps {
   issues: Issue[];
@@ -282,10 +284,57 @@ export default function DashboardView({
       });
   }, [issues]);
 
-  // Recent 5 issues
-  const recentIssues = useMemo(() => {
-    return [...issues].slice(0, 5);
+  // Recently added issues (sorted by newest timestamp or highest Issue No)
+  const sortedByLatest = useMemo(() => {
+    return [...issues].sort((a, b) => {
+      if (a.created_at && b.created_at) {
+        const timeA = new Date(a.created_at).getTime();
+        const timeB = new Date(b.created_at).getTime();
+        if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) {
+          return timeB - timeA;
+        }
+      }
+      const numA = parseIssueNumber(a.log_id);
+      const numB = parseIssueNumber(b.log_id);
+      if (numA !== numB) {
+        return numB - numA;
+      }
+      if (a.raise_date && b.raise_date) {
+        const dateA = new Date(a.raise_date).getTime();
+        const dateB = new Date(b.raise_date).getTime();
+        if (!isNaN(dateA) && !isNaN(dateB) && dateA !== dateB) {
+          return dateB - dateA;
+        }
+      }
+      return 0;
+    });
   }, [issues]);
+
+  const latestIssue = sortedByLatest[0] || null;
+  const recentIssues = useMemo(() => sortedByLatest.slice(0, 5), [sortedByLatest]);
+  const [showRecentMenu, setShowRecentMenu] = useState(false);
+  const recentMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close recent issues popover when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!showRecentMenu) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (recentMenuRef.current && !recentMenuRef.current.contains(e.target as Node)) {
+        setShowRecentMenu(false);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setShowRecentMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showRecentMenu]);
 
   return (
     <div className="space-y-6">
@@ -773,12 +822,99 @@ export default function DashboardView({
             </div>
           )}
 
-          {/* View All Issues CTA right below High Priority table */}
-          <div className="pt-1 flex justify-center">
+          {/* Action CTAs right below High Priority table: Latest Issue + View All Issues */}
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+            {/* 1. ปุ่มดู Issue ที่เพิ่งเพิ่มล่าสุด */}
+            {latestIssue && (
+              <div ref={recentMenuRef} className="relative inline-flex items-stretch rounded-xl shadow-xs">
+                {/* Main Action: คลิกเพื่อเปิดดู Issue ล่าสุดทันที */}
+                <button
+                  type="button"
+                  onClick={() => onSelectIssue(latestIssue)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-l-xl text-xs font-extrabold text-[#78350F] bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-300 hover:border-amber-400 text-left transition-all group"
+                  title={`คลิกเปิดดู ${latestIssue.log_id}: ${latestIssue.details}`}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                  </span>
+                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>ดู Issue ที่เพิ่งเพิ่มล่าสุด</span>
+                  <span className="font-mono text-[11px] font-black text-amber-900 bg-white/90 px-1.5 py-0.5 rounded border border-amber-300/80 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                    {latestIssue.log_id}
+                  </span>
+                </button>
+
+                {/* Dropdown Toggle: คลิกเพื่อเลือกดูจาก 5 รายการล่าสุด */}
+                {recentIssues.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowRecentMenu((v) => !v)}
+                    className="inline-flex items-center px-2 py-2 rounded-r-xl text-xs font-bold text-amber-900 bg-amber-100/80 hover:bg-amber-200 border-y border-r border-amber-300 transition-colors"
+                    title="เลือกดู 5 รายการล่าสุด"
+                    aria-label="เลือกดู 5 รายการล่าสุด"
+                  >
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-amber-700 transition-transform ${showRecentMenu ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                )}
+
+                {/* Dropdown Menu แสดง 5 รายการล่าสุด */}
+                {showRecentMenu && (
+                  <div className="absolute left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 top-full mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-amber-200 z-30 p-2 space-y-1 text-left">
+                    <div className="flex items-center justify-between px-2 py-1.5 border-b border-amber-100">
+                      <span className="text-[11px] font-extrabold text-amber-950 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        5 Issue ที่เพิ่มล่าสุดในระบบ
+                      </span>
+                      <span className="text-[10px] text-amber-700 font-medium">เรียงตามใหม่สุด</span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                      {recentIssues.map((issue, idx) => (
+                        <button
+                          key={issue.id}
+                          type="button"
+                          onClick={() => {
+                            setShowRecentMenu(false);
+                            onSelectIssue(issue);
+                          }}
+                          className="w-full text-left p-2 hover:bg-amber-50/70 rounded-lg transition-colors flex items-start gap-2 group"
+                        >
+                          <span
+                            className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                              idx === 0
+                                ? 'bg-amber-500 text-white border-amber-600'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 group-hover:border-amber-300'
+                            }`}
+                          >
+                            {issue.log_id}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-slate-800 line-clamp-1 group-hover:text-amber-950">
+                              {issue.details}
+                            </p>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
+                              <span className="truncate max-w-[100px]">{issue.module || 'ทั่วไป'}</span>
+                              <span>•</span>
+                              <span className="truncate max-w-[80px]">{issue.raise_by}</span>
+                              <span className="ml-auto font-medium text-slate-600">{issue.status}</span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2. ปุ่มดู Issue ทั้งหมด */}
             <button
               type="button"
               onClick={onGoToPriorityList || onGoToTable}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-extrabold text-[#0C2553] bg-white hover:bg-[#EFF7FF] border border-red-200 hover:border-[#0086FF] hover:text-[#044492] shadow-xs transition-all group"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-extrabold text-[#0C2553] bg-white hover:bg-[#EFF7FF] border border-blue-200 hover:border-[#0086FF] hover:text-[#044492] shadow-xs transition-all group"
             >
               <ListOrdered className="w-4 h-4 text-[#0086FF]" />
               <span>ดู Issue ทั้งหมด ({stats.total} รายการ)</span>
