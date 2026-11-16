@@ -22,6 +22,9 @@ import {
   Send,
   ListOrdered,
   Sparkles,
+  X,
+  Search,
+  Filter,
 } from 'lucide-react';
 import {
   Issue,
@@ -284,57 +287,56 @@ export default function DashboardView({
       });
   }, [issues]);
 
-  // Recently added issues (sorted by newest timestamp or highest Issue No)
-  const sortedByLatest = useMemo(() => {
+  // Pure Z-A sorting by Issue Number descending (ISSUE_39 -> ISSUE_1)
+  const issuesSortedZa = useMemo(() => {
     return [...issues].sort((a, b) => {
-      if (a.created_at && b.created_at) {
-        const timeA = new Date(a.created_at).getTime();
-        const timeB = new Date(b.created_at).getTime();
-        if (!isNaN(timeA) && !isNaN(timeB) && timeA !== timeB) {
-          return timeB - timeA;
-        }
-      }
       const numA = parseIssueNumber(a.log_id);
       const numB = parseIssueNumber(b.log_id);
-      if (numA !== numB) {
-        return numB - numA;
-      }
-      if (a.raise_date && b.raise_date) {
-        const dateA = new Date(a.raise_date).getTime();
-        const dateB = new Date(b.raise_date).getTime();
-        if (!isNaN(dateA) && !isNaN(dateB) && dateA !== dateB) {
-          return dateB - dateA;
-        }
-      }
-      return 0;
+      return numB - numA;
     });
   }, [issues]);
 
-  const latestIssue = sortedByLatest[0] || null;
-  const recentIssues = useMemo(() => sortedByLatest.slice(0, 5), [sortedByLatest]);
-  const [showRecentMenu, setShowRecentMenu] = useState(false);
-  const recentMenuRef = useRef<HTMLDivElement | null>(null);
+  const latestIssue = issuesSortedZa[0] || null;
+  const [showRecentModal, setShowRecentModal] = useState(false);
+  const [recentSearch, setRecentSearch] = useState('');
+  const [recentStatusFilter, setRecentStatusFilter] = useState('ALL');
 
-  // Close recent issues popover when clicking outside or pressing Escape
+  // Close recent modal on Escape key
   useEffect(() => {
-    if (!showRecentMenu) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (recentMenuRef.current && !recentMenuRef.current.contains(e.target as Node)) {
-        setShowRecentMenu(false);
-      }
-    }
+    if (!showRecentModal) return;
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        setShowRecentMenu(false);
+        setShowRecentModal(false);
       }
     }
-    document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showRecentMenu]);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showRecentModal]);
+
+  const filteredRecentList = useMemo(() => {
+    const q = recentSearch.trim().toLowerCase();
+    return issuesSortedZa.filter((item) => {
+      if (recentStatusFilter === 'ACTIVE' && item.status === 'Closed') return false;
+      if (recentStatusFilter !== 'ALL' && recentStatusFilter !== 'ACTIVE' && item.status !== recentStatusFilter) {
+        return false;
+      }
+      if (q) {
+        const hay = [
+          item.log_id,
+          item.details,
+          item.module,
+          item.core_function || DEFAULT_CORE_FUNCTION,
+          item.raise_by,
+          item.status,
+          item.priority,
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [issuesSortedZa, recentSearch, recentStatusFilter]);
 
   return (
     <div className="space-y-6">
@@ -822,99 +824,33 @@ export default function DashboardView({
             </div>
           )}
 
-          {/* Action CTAs right below High Priority table: Latest Issue + View All Issues */}
+          {/* Action CTAs right below High Priority table: Latest Issue (Z-A) + View All Issues */}
           <div className="pt-2 flex flex-wrap items-center justify-center gap-2.5">
-            {/* 1. ปุ่มดู Issue ที่เพิ่งเพิ่มล่าสุด */}
+            {/* 1. ปุ่มดู Issue ที่เพิ่งเพิ่มล่าสุด (เรียง Z-A) */}
             {latestIssue && (
-              <div ref={recentMenuRef} className="relative inline-flex items-stretch rounded-xl shadow-xs">
-                {/* Main Action: คลิกเพื่อเปิดดู Issue ล่าสุดทันที */}
-                <button
-                  type="button"
-                  onClick={() => onSelectIssue(latestIssue)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-l-xl text-xs font-extrabold text-[#78350F] bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-300 hover:border-amber-400 text-left transition-all group"
-                  title={`คลิกเปิดดู ${latestIssue.log_id}: ${latestIssue.details}`}
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
-                  </span>
-                  <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>ดู Issue ที่เพิ่งเพิ่มล่าสุด</span>
-                  <span className="font-mono text-[11px] font-black text-amber-900 bg-white/90 px-1.5 py-0.5 rounded border border-amber-300/80 group-hover:bg-amber-600 group-hover:text-white transition-colors">
-                    {latestIssue.log_id}
-                  </span>
-                </button>
-
-                {/* Dropdown Toggle: คลิกเพื่อเลือกดูจาก 5 รายการล่าสุด */}
-                {recentIssues.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowRecentMenu((v) => !v)}
-                    className="inline-flex items-center px-2 py-2 rounded-r-xl text-xs font-bold text-amber-900 bg-amber-100/80 hover:bg-amber-200 border-y border-r border-amber-300 transition-colors"
-                    title="เลือกดู 5 รายการล่าสุด"
-                    aria-label="เลือกดู 5 รายการล่าสุด"
-                  >
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 text-amber-700 transition-transform ${showRecentMenu ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-                )}
-
-                {/* Dropdown Menu แสดง 5 รายการล่าสุด */}
-                {showRecentMenu && (
-                  <div className="absolute left-1/2 -translate-x-1/2 sm:left-auto sm:right-0 sm:translate-x-0 top-full mt-2 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-amber-200 z-30 p-2 space-y-1 text-left">
-                    <div className="flex items-center justify-between px-2 py-1.5 border-b border-amber-100">
-                      <span className="text-[11px] font-extrabold text-amber-950 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                        5 Issue ที่เพิ่มล่าสุดในระบบ
-                      </span>
-                      <span className="text-[10px] text-amber-700 font-medium">เรียงตามใหม่สุด</span>
-                    </div>
-
-                    <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                      {recentIssues.map((issue, idx) => (
-                        <button
-                          key={issue.id}
-                          type="button"
-                          onClick={() => {
-                            setShowRecentMenu(false);
-                            onSelectIssue(issue);
-                          }}
-                          className="w-full text-left p-2 hover:bg-amber-50/70 rounded-lg transition-colors flex items-start gap-2 group"
-                        >
-                          <span
-                            className={`font-mono text-[11px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${
-                              idx === 0
-                                ? 'bg-amber-500 text-white border-amber-600'
-                                : 'bg-slate-100 text-slate-700 border-slate-200 group-hover:border-amber-300'
-                            }`}
-                          >
-                            {issue.log_id}
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-slate-800 line-clamp-1 group-hover:text-amber-950">
-                              {issue.details}
-                            </p>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5">
-                              <span className="truncate max-w-[100px]">{issue.module || 'ทั่วไป'}</span>
-                              <span>•</span>
-                              <span className="truncate max-w-[80px]">{issue.raise_by}</span>
-                              <span className="ml-auto font-medium text-slate-600">{issue.status}</span>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowRecentModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold text-[#78350F] bg-gradient-to-r from-amber-50 via-yellow-50 to-orange-50 hover:from-amber-100 hover:to-orange-100 border border-amber-300 hover:border-amber-400 shadow-xs transition-all group hover:scale-[1.02] active:scale-[0.98]"
+                title={`คลิกเปิดดูรายการ Issue เรียงจากล่าสุด (${latestIssue.log_id}) ไล่ลงไป แบบ Z-A`}
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                </span>
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>ดู Issue ที่เพิ่งเพิ่มล่าสุด (เรียง Z-A)</span>
+                <span className="font-mono text-[11px] font-black text-amber-900 bg-white/90 px-1.5 py-0.5 rounded border border-amber-300/80 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                  {latestIssue.log_id} ➔
+                </span>
+              </button>
             )}
 
             {/* 2. ปุ่มดู Issue ทั้งหมด */}
             <button
               type="button"
               onClick={onGoToPriorityList || onGoToTable}
-              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-extrabold text-[#0C2553] bg-white hover:bg-[#EFF7FF] border border-blue-200 hover:border-[#0086FF] hover:text-[#044492] shadow-xs transition-all group"
+              className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-extrabold text-[#0C2553] bg-white hover:bg-[#EFF7FF] border border-blue-200 hover:border-[#0086FF] hover:text-[#044492] shadow-xs transition-all group hover:scale-[1.02] active:scale-[0.98]"
             >
               <ListOrdered className="w-4 h-4 text-[#0086FF]" />
               <span>ดู Issue ทั้งหมด ({stats.total} รายการ)</span>
@@ -1528,6 +1464,209 @@ export default function DashboardView({
           </div>
         )}
       </div>
+
+      {/* 6. Modal: รายการ Issue เรียงจากเลขล่าสุดลงไป (Z-A) */}
+      {showRecentModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setShowRecentModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[88vh] flex flex-col border border-slate-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-3.5 bg-gradient-to-r from-[#0C2553] via-[#044492] to-[#0074E0] text-white flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#FFCB06] text-[#0C2553]">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black flex items-center gap-2">
+                    Issue เรียงจากเลขล่าสุดลงไป (Z-A)
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">
+                      {issues.length} รายการ
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-blue-100">
+                    เรียงจากหมายเลขล่าสุดลงไป (มาก ➔ น้อย: {latestIssue?.log_id || ''} ➔ ISSUE_1)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRecentModal(false)}
+                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+                title="ปิดหน้าต่าง"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="ค้นหาเลข Issue, รายละเอียด, โมดูล, หรือผู้แจ้ง..."
+                  value={recentSearch}
+                  onChange={(e) => setRecentSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs focus:outline-hidden focus:ring-2 focus:ring-[#0086FF]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <select
+                  value={recentStatusFilter}
+                  onChange={(e) => setRecentStatusFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-hidden"
+                >
+                  <option value="ALL">ทุกสถานะ ({issuesSortedZa.length})</option>
+                  <option value="ACTIVE">เฉพาะที่ยังไม่ Closed ({issuesSortedZa.filter((i) => i.status !== 'Closed').length})</option>
+                  <option value="Open">Open</option>
+                  <option value="Need Info">Need Info</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Test">Test</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Issues List sorted Z-A */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
+              {filteredRecentList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs">
+                  ไม่พบรายการที่ตรงกับเงื่อนไขการค้นหา
+                </div>
+              ) : (
+                filteredRecentList.map((issue, idx) => {
+                  const coreFn = (issue.core_function || DEFAULT_CORE_FUNCTION) as CoreFunctionType;
+                  const coreMeta = CORE_FUNCTION_META[coreFn] || CORE_FUNCTION_META[DEFAULT_CORE_FUNCTION];
+                  const isLatest = idx === 0 && !recentSearch && recentStatusFilter === 'ALL';
+
+                  const statusColor =
+                    issue.status === 'Need Info'
+                      ? 'text-orange-800 bg-orange-50 border-orange-300'
+                      : issue.status === 'In Progress'
+                        ? 'text-purple-700 bg-purple-50 border-purple-200'
+                        : issue.status === 'Test'
+                          ? 'text-blue-700 bg-blue-50 border-blue-200'
+                          : issue.status === 'Closed'
+                            ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                            : 'text-amber-700 bg-amber-50 border-amber-200';
+
+                  const priorityColor = issue.priority.includes('High')
+                    ? 'text-red-700 bg-red-50 border-red-200'
+                    : issue.priority.includes('Medium')
+                      ? 'text-amber-700 bg-amber-50 border-amber-200'
+                      : 'text-sky-700 bg-sky-50 border-sky-200';
+
+                  return (
+                    <div
+                      key={issue.id}
+                      onClick={() => {
+                        setShowRecentModal(false);
+                        onSelectIssue(issue);
+                      }}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer group flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                        isLatest
+                          ? 'bg-amber-50/60 border-amber-300 hover:bg-amber-100/60 shadow-xs'
+                          : 'bg-white border-slate-200 hover:border-[#0086FF]/50 hover:bg-[#EFF7FF]/50'
+                      }`}
+                    >
+                      {/* Left: Issue No, Core/Module, Details */}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span
+                            className={`font-mono text-xs font-black px-2 py-0.5 rounded-md border ${
+                              isLatest
+                                ? 'bg-amber-500 text-white border-amber-600'
+                                : 'bg-slate-100 text-slate-800 border-slate-200 group-hover:bg-[#0086FF] group-hover:text-white transition-colors'
+                            }`}
+                          >
+                            {issue.log_id}
+                          </span>
+
+                          {isLatest && (
+                            <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-red-500 text-white animate-pulse">
+                              ล่าสุด NEW
+                            </span>
+                          )}
+
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${coreMeta.badgeBg} ${coreMeta.badgeText} ${coreMeta.badgeBorder}`}>
+                            {coreMeta.shortName}
+                          </span>
+
+                          <span className="text-[10px] font-medium text-slate-500">
+                            • {issue.module}
+                          </span>
+
+                          {issue.images && issue.images.length > 0 && (
+                            <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 px-1 py-0.5 rounded border border-indigo-100 flex items-center gap-0.5">
+                              <ImageIcon className="w-2.5 h-2.5" />
+                              {issue.images.length}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="text-xs sm:text-sm font-semibold text-slate-800 line-clamp-2 group-hover:text-[#0C2553]">
+                          {issue.details}
+                        </p>
+
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-0.5">
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3 text-slate-400" />
+                            {issue.raise_by}
+                          </span>
+                          {issue.raise_date && (
+                            <span>
+                              แจ้ง {new Date(issue.raise_date).toLocaleDateString('th-TH')}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Priority, Status, Action */}
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-1.5 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${priorityColor}`}>
+                            {issue.priority}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${statusColor}`}>
+                            {issue.status}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-bold text-[#0086FF] group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
+                          ดูรายละเอียด <ArrowRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+              <span className="text-slate-500 font-medium">
+                แสดง {filteredRecentList.length} จาก {issues.length} รายการ (เรียงจากเลขล่าสุดลงไป Z-A)
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRecentModal(false);
+                  if (onGoToPriorityList) onGoToPriorityList();
+                  else onGoToTable();
+                }}
+                className="inline-flex items-center gap-1 font-bold text-[#0086FF] hover:text-[#044492] hover:underline"
+              >
+                ดูในหน้าเต็มแบบ Priority List (Z-A) <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

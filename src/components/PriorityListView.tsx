@@ -56,7 +56,7 @@ export default function PriorityListView({
   const [coreFilter, setCoreFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [hideClosed, setHideClosed] = useState(false);
-  const [sortBy, setSortBy] = useState<PrioritySortMode>('log_id_asc');
+  const [sortBy, setSortBy] = useState<PrioritySortMode>('log_id_desc');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const baseFilteredIssues = useMemo(() => {
@@ -262,8 +262,8 @@ export default function PriorityListView({
               onChange={(e) => setSortBy(e.target.value as PrioritySortMode)}
               className="py-1 px-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none"
             >
-              <option value="log_id_asc">เรียง Issue No (น้อย ➔ มาก)</option>
-              <option value="log_id_desc">เรียง Issue No (มาก ➔ น้อย)</option>
+              <option value="log_id_desc">เรียง Issue No (มาก ➔ น้อย / ล่าสุดก่อน Z-A)</option>
+              <option value="log_id_asc">เรียง Issue No (น้อย ➔ มาก / A-Z)</option>
               <option value="status">เรียงตามสถานะ</option>
             </select>
           </div>
