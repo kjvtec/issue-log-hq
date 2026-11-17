@@ -26,12 +26,15 @@ import {
   CoreFunctionType,
   CORE_FUNCTION_META,
   DEFAULT_CORE_FUNCTION,
+  SystemModule,
+  DEFAULT_MODULES_BY_CORE,
 } from '@/types';
 import { getStatusBadgeClass, STATUS_ORDER } from '@/lib/status';
 import { PRIORITY_GROUPS, sortIssuesClosedLast } from '@/lib/issueSort';
 
 interface PriorityListViewProps {
   issues: Issue[];
+  modules?: SystemModule[];
   onSelectIssue: (issue: Issue) => void;
   onCreateIssue: (presetCore?: CoreFunctionType, presetModule?: string, presetPriority?: PriorityType) => void;
   onExportExcel: (targetIssues: Issue[], scopeTitle?: string) => void;
@@ -47,6 +50,7 @@ function PriorityGroupIcon({ priority }: { priority: PriorityType }) {
 
 export default function PriorityListView({
   issues,
+  modules,
   onSelectIssue,
   onCreateIssue,
   onExportExcel,
@@ -54,16 +58,67 @@ export default function PriorityListView({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<PriorityType | 'ALL'>('ALL');
   const [coreFilter, setCoreFilter] = useState<string>('');
+  const [moduleFilter, setModuleFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [hideClosed, setHideClosed] = useState(false);
   const [sortBy, setSortBy] = useState<PrioritySortMode>('log_id_desc');
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const availableModules = useMemo(() => {
+    const set = new Set<string>();
+
+    if (modules && modules.length > 0) {
+      modules.forEach((m) => {
+        if (!coreFilter || !m.core_function || m.core_function === coreFilter) {
+          if (m.name) set.add(m.name);
+        }
+      });
+    }
+
+    if (coreFilter && DEFAULT_MODULES_BY_CORE[coreFilter as CoreFunctionType]) {
+      DEFAULT_MODULES_BY_CORE[coreFilter as CoreFunctionType].forEach((m) => set.add(m));
+    } else if (!coreFilter) {
+      Object.values(DEFAULT_MODULES_BY_CORE).forEach((list) => {
+        list.forEach((m) => set.add(m));
+      });
+    }
+
+    issues.forEach((i) => {
+      if (!coreFilter || (i.core_function || DEFAULT_CORE_FUNCTION) === coreFilter) {
+        if (i.module) set.add(i.module);
+      }
+    });
+
+    return Array.from(set).filter(Boolean).sort((a, b) => a.localeCompare(b, 'th'));
+  }, [modules, issues, coreFilter]);
+
+  const handleCoreChange = (newCore: string) => {
+    setCoreFilter(newCore);
+    if (moduleFilter && newCore) {
+      const allowedInCore = new Set<string>();
+      if (DEFAULT_MODULES_BY_CORE[newCore as CoreFunctionType]) {
+        DEFAULT_MODULES_BY_CORE[newCore as CoreFunctionType].forEach((m) => allowedInCore.add(m));
+      }
+      if (modules) {
+        modules.filter((m) => m.core_function === newCore).forEach((m) => allowedInCore.add(m.name));
+      }
+      issues
+        .filter((i) => (i.core_function || DEFAULT_CORE_FUNCTION) === newCore)
+        .forEach((i) => {
+          if (i.module) allowedInCore.add(i.module);
+        });
+      if (!allowedInCore.has(moduleFilter)) {
+        setModuleFilter('');
+      }
+    }
+  };
 
   const baseFilteredIssues = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return issues.filter((item) => {
       if (hideClosed && item.status === 'Closed') return false;
       if (coreFilter && (item.core_function || DEFAULT_CORE_FUNCTION) !== coreFilter) return false;
+      if (moduleFilter && item.module !== moduleFilter) return false;
       if (statusFilter && item.status !== statusFilter) return false;
       if (q) {
         const hay = [
@@ -81,7 +136,7 @@ export default function PriorityListView({
       }
       return true;
     });
-  }, [issues, searchQuery, hideClosed, coreFilter, statusFilter]);
+  }, [issues, searchQuery, hideClosed, coreFilter, moduleFilter, statusFilter]);
 
   const groupedData = useMemo(() => {
     return PRIORITY_GROUPS.map((meta) => {
@@ -121,12 +176,13 @@ export default function PriorityListView({
   };
 
   const hasFilters = Boolean(
-    searchQuery || coreFilter || statusFilter || hideClosed || selectedPriority !== 'ALL'
+    searchQuery || coreFilter || moduleFilter || statusFilter || hideClosed || selectedPriority !== 'ALL'
   );
 
   const clearFilters = () => {
     setSearchQuery('');
     setCoreFilter('');
+    setModuleFilter('');
     setStatusFilter('');
     setHideClosed(false);
     setSelectedPriority('ALL');
@@ -184,12 +240,15 @@ export default function PriorityListView({
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={() =>
-                onExportExcel(
-                  flatExportItems,
-                  selectedPriority === 'ALL' ? 'Priority List View' : `Priority ${selectedPriority}`
-                )
-              }
+              onClick={() => {
+                const parts: string[] = [];
+                if (selectedPriority !== 'ALL') parts.push(selectedPriority);
+                if (coreFilter) parts.push(coreFilter);
+                if (moduleFilter) parts.push(moduleFilter);
+                if (statusFilter) parts.push(statusFilter);
+                const scopeTitle = parts.length > 0 ? parts.join(' - ') : 'Priority List View';
+                onExportExcel(flatExportItems, scopeTitle);
+              }}
               disabled={flatExportItems.length === 0}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl transition-colors disabled:opacity-50"
             >
@@ -201,7 +260,7 @@ export default function PriorityListView({
               onClick={() =>
                 onCreateIssue(
                   coreFilter ? (coreFilter as CoreFunctionType) : undefined,
-                  undefined,
+                  moduleFilter || undefined,
                   selectedPriority !== 'ALL' ? selectedPriority : undefined
                 )
               }
@@ -230,7 +289,7 @@ export default function PriorityListView({
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={coreFilter}
-              onChange={(e) => setCoreFilter(e.target.value)}
+              onChange={(e) => handleCoreChange(e.target.value)}
               className="py-1 px-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none"
             >
               <option value="">ทุกกลุ่มหลัก</option>
@@ -241,6 +300,19 @@ export default function PriorityListView({
               ))}
             </select>
           </div>
+
+          <select
+            value={moduleFilter}
+            onChange={(e) => setModuleFilter(e.target.value)}
+            className="py-1 px-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:border-indigo-400 focus:outline-none"
+          >
+            <option value="">ทุกกลุ่มย่อย</option>
+            {availableModules.map((mod) => (
+              <option key={mod} value={mod}>
+                {mod}
+              </option>
+            ))}
+          </select>
 
           <select
             value={statusFilter}

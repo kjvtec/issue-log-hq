@@ -1113,6 +1113,7 @@ export default function HomePage() {
         {activeTab === 'priority' && (
           <PriorityListView
             issues={issues}
+            modules={modules}
             onSelectIssue={(issue) => {
               setSelectedIssue(issue);
               setDetailModalOpen(true);
