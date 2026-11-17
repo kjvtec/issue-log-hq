@@ -213,22 +213,15 @@ export default function HomePage() {
     raise_by: '',
   });
 
-  // Merge DB modules with per-Core default sub-modules
+  // Normalize DB modules (fallback to DEFAULT_MODULES only when DB table is empty)
   const mergeModulesWithDefaults = useCallback((dbModules: SystemModule[]): SystemModule[] => {
-    const normalizedDb = dbModules.map((m) => ({
+    if (!dbModules || dbModules.length === 0) {
+      return DEFAULT_MODULES;
+    }
+    return dbModules.map((m) => ({
       ...m,
       core_function: (m.core_function || DEFAULT_CORE_FUNCTION) as CoreFunctionType,
     }));
-
-    const existingKeys = new Set(
-      normalizedDb.map((m) => `${m.core_function || DEFAULT_CORE_FUNCTION}::${m.name.toLowerCase()}`)
-    );
-
-    const extras = DEFAULT_MODULES.filter(
-      (def) => !existingKeys.has(`${def.core_function || DEFAULT_CORE_FUNCTION}::${def.name.toLowerCase()}`)
-    );
-
-    return [...normalizedDb, ...extras];
   }, []);
 
   const metadataLoadedRef = useRef(false);
@@ -732,6 +725,121 @@ export default function HomePage() {
     }
   };
 
+  // Update Sub-module (Rename)
+  const handleUpdateModule = async (
+    oldName: string,
+    newName: string,
+    coreFunction: CoreFunctionType | string = DEFAULT_CORE_FUNCTION
+  ) => {
+    const trimmedNew = newName.trim();
+    if (!trimmedNew || trimmedNew === oldName) return;
+
+    // Check duplicate in the same core
+    const duplicate = modules.some(
+      (m) =>
+        (m.core_function || DEFAULT_CORE_FUNCTION) === coreFunction &&
+        m.name.toLowerCase() === trimmedNew.toLowerCase()
+    );
+    if (duplicate) {
+      alert(`มีกลุ่มย่อยชื่อ "${trimmedNew}" ในกลุ่ม ${coreFunction} อยู่แล้ว`);
+      return;
+    }
+
+    if (isSupabaseConfigured) {
+      // 1. Update in modules table
+      const { error: modErr } = await supabase
+        .from('modules')
+        .update({ name: trimmedNew })
+        .eq('core_function', coreFunction)
+        .eq('name', oldName);
+
+      if (modErr) {
+        console.error('Update module error:', modErr);
+        alert('เกิดข้อผิดพลาดในการแก้ไขชื่อกลุ่มย่อย: ' + modErr.message);
+        return;
+      }
+
+      // 2. Cascade update in issues table for all issues referencing this module in this core
+      const { error: issueErr } = await supabase
+        .from('issues')
+        .update({ module: trimmedNew })
+        .eq('core_function', coreFunction)
+        .eq('module', oldName);
+
+      if (issueErr) {
+        console.error('Cascade update issues module error:', issueErr);
+      }
+    }
+
+    // Optimistic state updates
+    setModules((prev) =>
+      prev.map((m) =>
+        (m.core_function || DEFAULT_CORE_FUNCTION) === coreFunction && m.name === oldName
+          ? { ...m, name: trimmedNew }
+          : m
+      )
+    );
+
+    setIssues((prev) =>
+      prev.map((i) =>
+        (i.core_function || DEFAULT_CORE_FUNCTION) === coreFunction && i.module === oldName
+          ? { ...i, module: trimmedNew }
+          : i
+      )
+    );
+
+    if (explorerModule === oldName) {
+      setExplorerModule(trimmedNew);
+    }
+  };
+
+  // Delete Sub-module (with strict check: cannot delete if issues exist)
+  const handleDeleteModule = async (
+    name: string,
+    coreFunction: CoreFunctionType | string = DEFAULT_CORE_FUNCTION
+  ): Promise<{ success: boolean; message?: string }> => {
+    // 1. Check if ANY issue is using this module
+    const usedIssues = issues.filter(
+      (i) => (i.core_function || DEFAULT_CORE_FUNCTION) === coreFunction && i.module === name
+    );
+
+    if (usedIssues.length > 0) {
+      return {
+        success: false,
+        message: `ไม่สามารถลบกลุ่มย่อย "${name}" ได้ เนื่องจากมีปัญหา (Issue) ใช้งานกลุ่มย่อยนี้อยู่ ${usedIssues.length} รายการ\nกรุณาย้ายหรือเปลี่ยนกลุ่มย่อยของ Issue ดังกล่าวให้เรียบร้อยก่อนทำการลบ`,
+      };
+    }
+
+    if (isSupabaseConfigured) {
+      const { error } = await supabase
+        .from('modules')
+        .delete()
+        .eq('core_function', coreFunction)
+        .eq('name', name);
+
+      if (error) {
+        console.error('Delete module error:', error);
+        return {
+          success: false,
+          message: 'เกิดข้อผิดพลาดในการลบกลุ่มย่อย: ' + error.message,
+        };
+      }
+    }
+
+    // Optimistic state update
+    setModules((prev) =>
+      prev.filter(
+        (m) => !((m.core_function || DEFAULT_CORE_FUNCTION) === coreFunction && m.name === name)
+      )
+    );
+
+    if (explorerModule === name) {
+      setExplorerModule(null);
+    }
+
+    return { success: true };
+  };
+
   // Add Team Member
   const handleAddTeamMember = async (name: string) => {
     if (isSupabaseConfigured) {
@@ -1106,6 +1214,8 @@ export default function HomePage() {
             onCreateIssue={(presetCore, presetModule) => openCreateModal(presetCore, presetModule)}
             onExportExcel={handleExportExcel}
             onAddModule={handleAddModule}
+            onUpdateModule={handleUpdateModule}
+            onDeleteModule={handleDeleteModule}
           />
         )}
 
