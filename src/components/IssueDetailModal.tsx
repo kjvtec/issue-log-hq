@@ -22,6 +22,15 @@ import {
   History,
   UserCheck,
   AlertCircle,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  List,
+  ListOrdered,
+  Link2,
+  Code,
+  Quote,
 } from 'lucide-react';
 import {
   Issue,
@@ -44,6 +53,7 @@ import { getStatusBadgeClass } from '@/lib/status';
 import LightboxModal from './LightboxModal';
 import ImageUploader from './ImageUploader';
 import DriveFilesPanel from './DriveFilesPanel';
+import FormattedText from './FormattedText';
 import type { NewFile } from '@/types';
 
 interface IssueDetailModalProps {
@@ -94,6 +104,82 @@ export default function IssueDetailModal({
 
   const lastIssueIdRef = useRef<string | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const wrapSelection = (prefix: string, suffix: string = '', defaultPlaceholder: string = '') => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = newMessage.substring(start, end);
+
+    const replacement = selected ? `${prefix}${selected}${suffix}` : `${prefix}${defaultPlaceholder}${suffix}`;
+    const nextVal = newMessage.substring(0, start) + replacement + newMessage.substring(end);
+    setNewMessage(nextVal);
+    if (validationError) setValidationError(null);
+
+    setTimeout(() => {
+      el.focus();
+      if (selected) {
+        el.setSelectionRange(start + prefix.length, end + prefix.length);
+      } else {
+        el.setSelectionRange(start + prefix.length, start + prefix.length + defaultPlaceholder.length);
+      }
+    }, 10);
+  };
+
+  const insertLinePrefix = (prefix: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = newMessage.substring(start, end);
+
+    if (selected) {
+      const lines = selected.split('\n').map((l, idx) => {
+        if (prefix === '1. ') return `${idx + 1}. ${l}`;
+        return `${prefix}${l}`;
+      });
+      const replacement = lines.join('\n');
+      const nextVal = newMessage.substring(0, start) + replacement + newMessage.substring(end);
+      setNewMessage(nextVal);
+    } else {
+      const lineStart = newMessage.lastIndexOf('\n', start - 1) + 1;
+      const nextVal = newMessage.substring(0, lineStart) + prefix + newMessage.substring(lineStart);
+      setNewMessage(nextVal);
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(start + prefix.length, start + prefix.length);
+      }, 10);
+    }
+    if (validationError) setValidationError(null);
+  };
+
+  const handleInsertLink = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = newMessage.substring(start, end);
+
+    const url = window.prompt('ใส่ลิงก์ URL ที่ต้องการ (https://...):', 'https://');
+    if (!url || url.trim() === 'https://') return;
+
+    const cleanUrl = url.trim();
+    const label = selected.trim() || 'ข้อความลิงก์';
+    const markdownLink = `[${label}](${cleanUrl})`;
+
+    const nextVal = newMessage.substring(0, start) + markdownLink + newMessage.substring(end);
+    setNewMessage(nextVal);
+    if (validationError) setValidationError(null);
+
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + markdownLink.length, start + markdownLink.length);
+    }, 10);
+  };
 
   // Sync state when issue opens or updates
   useEffect(() => {
@@ -581,123 +667,7 @@ export default function IssueDetailModal({
               </div>
             </div>
 
-            {/* Google Drive Files Panel */}
-            {onAddFile && onDeleteFile && (
-              <DriveFilesPanel
-                files={issue.files || []}
-                uploaders={devUploaders}
-                defaultUploader=""
-                issueLogId={issue.log_id}
-                sourceSystem="Issue"
-                onAdd={(file) => onAddFile(issue.id, file)}
-                onDelete={onDeleteFile}
-              />
-            )}
-
-            {/* TIMELINE / CONVERSATION HISTORY SECTION */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-                  <History className="w-4 h-4 text-indigo-600" />
-                  <span>ประวัติการอัปเดต & โต้ตอบ (Timeline)</span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                    {timelineEntries.length} รายการ
-                  </span>
-                </h3>
-                <span className="text-[11px] text-slate-400">
-                  บันทึกต่อเนื่องโดยไม่ทับข้อความเดิม
-                </span>
-              </div>
-
-              {timelineEntries.length === 0 ? (
-                <div className="p-4 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-slate-400 shrink-0" />
-                  ยังไม่มีประวัติการอัปเดตหรือการขอข้อมูลเพิ่ม — สามารถบันทึกได้ในกล่องด้านล่าง
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {timelineEntries.map((entry, idx) => {
-                    if (entry.isLegacy) {
-                      return (
-                        <div
-                          key={idx}
-                          className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm space-y-1.5"
-                        >
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
-                            <span>บันทึกแนวทางแก้ไขเดิม (Resolution)</span>
-                          </div>
-                          <p className="text-slate-800 whitespace-pre-wrap leading-relaxed">{entry.message}</p>
-                        </div>
-                      );
-                    }
-
-                    const entryIsNeedInfo = entry.statusLabel === 'Need Info';
-                    const isCaseOwner =
-                      entry.author &&
-                      issue.raise_by &&
-                      entry.author.toLowerCase() === issue.raise_by.toLowerCase();
-
-                    return (
-                      <div
-                        key={idx}
-                        className={`p-3.5 rounded-xl border text-xs sm:text-sm space-y-2 shadow-2xs ${
-                          entryIsNeedInfo
-                            ? 'bg-orange-50/70 border-orange-200'
-                            : entry.statusLabel === 'Closed'
-                              ? 'bg-emerald-50/60 border-emerald-200'
-                              : 'bg-white border-slate-200'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span
-                              className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-extrabold text-white shrink-0 ${
-                                entryIsNeedInfo
-                                  ? 'bg-orange-500'
-                                  : isCaseOwner
-                                    ? 'bg-indigo-600'
-                                    : 'bg-slate-700'
-                              }`}
-                            >
-                              {(entry.author || '?').slice(0, 2).toUpperCase()}
-                            </span>
-                            <span className="font-bold text-slate-900">{entry.author || 'ไม่ระบุ'}</span>
-                            {isCaseOwner && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                คนเปิด Case
-                              </span>
-                            )}
-                            {entry.statusLabel && (
-                              <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getStatusBadgeClass(
-                                  entry.statusLabel
-                                )}`}
-                              >
-                                {entry.statusLabel === 'Need Info'
-                                  ? 'Need Info (ขอข้อมูลเพิ่ม)'
-                                  : entry.statusLabel}
-                              </span>
-                            )}
-                          </div>
-                          {entry.timestamp && (
-                            <span className="text-[11px] font-medium text-slate-400">
-                              {entry.timestamp}
-                            </span>
-                          )}
-                        </div>
-                        {entry.message && (
-                          <p className="text-slate-800 whitespace-pre-wrap leading-relaxed pl-8">
-                            {entry.message}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* INLINE UPDATE SECTION */}
+            {/* INLINE UPDATE / COMPOSER SECTION */}
             <div
               ref={composerRef}
               className={`rounded-2xl border-2 p-5 space-y-4 shadow-sm ${
@@ -793,7 +763,139 @@ export default function IssueDetailModal({
                 )}
               </div>
 
-              {/* Add More Images (ImageUploader with Ctrl+V) - Positioned above message textarea */}
+              {/* 1. New Update Message Textarea with Formatting Toolbar */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  {isNeedInfo
+                    ? 'ข้อความตอบกลับข้อมูลเพิ่มเติมสำหรับ Dev:'
+                    : 'ข้อความอัปเดตใหม่ (คำถามขอข้อมูลเพิ่ม / แนวทางแก้ไข / ข้อความตอบกลับ):'}
+                </label>
+                <div className="rounded-2xl border-2 border-slate-200 bg-white shadow-xs overflow-hidden focus-within:border-indigo-500 transition-all">
+                  {/* Toolbar */}
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 px-3 py-2 bg-slate-50/90 border-b border-slate-200 text-xs">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-[11px] font-bold text-slate-500 mr-1 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> เครื่องมือจัดข้อความ:
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => wrapSelection('**', '**', 'ตัวหนา')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="ตัวหนา (Ctrl+B) • **ข้อความ**"
+                      >
+                        <Bold className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => wrapSelection('*', '*', 'ตัวเอียง')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="ตัวเอียง (Ctrl+I) • *ข้อความ*"
+                      >
+                        <Italic className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => wrapSelection('<u>', '</u>', 'ขีดเส้นใต้')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="ขีดเส้นใต้ • <u>ข้อความ</u>"
+                      >
+                        <Underline className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => wrapSelection('~~', '~~', 'ข้อความ')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="ขีดฆ่า • ~~ข้อความ~~"
+                      >
+                        <Strikethrough className="w-3.5 h-3.5" />
+                      </button>
+
+                      <div className="h-4 w-px bg-slate-300 mx-0.5" />
+
+                      <button
+                        type="button"
+                        onClick={() => insertLinePrefix('- ')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="รายการแบบจุด (Bullet List) • - รายการ"
+                      >
+                        <List className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => insertLinePrefix('1. ')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="รายการแบบตัวเลข (Numbered List) • 1. รายการ"
+                      >
+                        <ListOrdered className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleInsertLink}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="แทรกลิงก์ Hyperlink • [ชื่อ](url)"
+                      >
+                        <Link2 className="w-3.5 h-3.5 text-indigo-600" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => wrapSelection('`', '`', 'code')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="Inline Code • `code`"
+                      >
+                        <Code className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => insertLinePrefix('> ')}
+                        className="p-1.5 rounded-lg hover:bg-slate-200/80 text-slate-700 hover:text-slate-900 transition-colors"
+                        title="Quote / ข้อความอ้างอิง • > ข้อความ"
+                      >
+                        <Quote className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                      💡 แปะลิงก์ URL ตรงๆ จะกลายเป็น Hyperlink อัตโนมัติ
+                    </span>
+                  </div>
+
+                  <textarea
+                    ref={textareaRef}
+                    rows={4}
+                    value={newMessage}
+                    onChange={(e) => {
+                      setNewMessage(e.target.value);
+                      if (validationError) setValidationError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+                        e.preventDefault();
+                        wrapSelection('**', '**', 'ตัวหนา');
+                      }
+                      if ((e.ctrlKey || e.metaKey) && (e.key === 'i' || e.key === 'I')) {
+                        e.preventDefault();
+                        wrapSelection('*', '*', 'ตัวเอียง');
+                      }
+                    }}
+                    placeholder={
+                      isNeedInfo
+                        ? 'ระบุข้อมูลเพิ่มเติมที่ Dev ถามหา เช่น ตั้งค่าไว้แบบใด, แนบภาพหน้าจอเพิ่ม, ขั้นตอนที่พบปัญหา... (รองรับตัวหนา, ลิสต์รายการ, แปะลิงก์ URL จะเป็น Hyperlink ให้อัตโนมัติ)'
+                        : 'ระบุสิ่งที่ต้องการขอข้อมูลเพิ่มจากผู้เปิด Case หรือรายละเอียดการแก้ไข... (รองรับตัวหนา, ลิสต์รายการ, แปะลิงก์ URL จะเป็น Hyperlink ให้อัตโนมัติ)'
+                    }
+                    className="w-full p-3.5 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none resize-y min-h-[110px] bg-transparent font-sans"
+                  />
+                </div>
+              </div>
+
+              {/* 2. กล่องแนบรูปภาพเพิ่มเติม */}
               <div className="bg-white p-3.5 rounded-xl border border-slate-200">
                 <ImageUploader
                   images={newImages}
@@ -803,28 +905,18 @@ export default function IssueDetailModal({
                 />
               </div>
 
-              {/* New Update Message Textarea */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isNeedInfo
-                    ? 'ข้อความตอบกลับข้อมูลเพิ่มเติมสำหรับ Dev:'
-                    : 'ข้อความอัปเดตใหม่ (คำถามขอข้อมูลเพิ่ม / แนวทางแก้ไข / ข้อความตอบกลับ):'}
-                </label>
-                <textarea
-                  rows={3}
-                  value={newMessage}
-                  onChange={(e) => {
-                    setNewMessage(e.target.value);
-                    if (validationError) setValidationError(null);
-                  }}
-                  placeholder={
-                    isNeedInfo
-                      ? 'ระบุข้อมูลเพิ่มเติมที่ Dev ถามหา เช่น ตั้งค่าไว้แบบใด, แนบภาพหน้าจอเพิ่ม, ขั้นตอนที่พบปัญหา...'
-                      : 'ระบุสิ่งที่ต้องการขอข้อมูลเพิ่มจากผู้เปิด Case หรือรายละเอียดการแก้ไข (จะเพิ่มเป็นรายการใหม่ใน Timeline)...'
-                  }
-                  className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white leading-relaxed"
+              {/* 3. ไฟล์แนบ Google Drive (ย้ายมาไว้ใต้กล่องแนบรูป) */}
+              {onAddFile && onDeleteFile && (
+                <DriveFilesPanel
+                  files={issue.files || []}
+                  uploaders={devUploaders}
+                  defaultUploader=""
+                  issueLogId={issue.log_id}
+                  sourceSystem="Issue"
+                  onAdd={(file) => onAddFile(issue.id, file)}
+                  onDelete={onDeleteFile}
                 />
-              </div>
+              )}
 
               {/* Closed details & Remark */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -942,6 +1034,110 @@ export default function IssueDetailModal({
                       {isSaving ? 'กำลังบันทึก...' : 'บันทึกการอัปเดต (Save Updates)'}
                     </button>
                   </>
+                )}
+              </div>
+            </div>
+
+            {/* TIMELINE / CONVERSATION HISTORY SECTION */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                  <History className="w-4 h-4 text-indigo-600" />
+                  <span>ประวัติการอัปเดต &amp; Timeline การคุย ({timelineEntries.length})</span>
+                </h3>
+                <span className="text-[11px] text-slate-400">
+                  บันทึกต่อเนื่องโดยไม่ทับข้อความเดิม
+                </span>
+              </div>
+
+              <div className="rounded-2xl border-2 border-slate-200/90 bg-slate-50/70 p-4 sm:p-5 shadow-xs">
+                {timelineEntries.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 text-xs sm:text-sm">
+                    <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    ยังไม่มีประวัติการอัปเดตหรือข้อความโต้ตอบ สามารถพิมพ์อัปเดตได้ที่กล่องด้านบน
+                  </div>
+                ) : (
+                  <div className="relative pl-6 sm:pl-8 space-y-4 before:absolute before:left-3 sm:before:left-4 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                    {timelineEntries.map((entry, idx) => {
+                      const isLegacy = entry.isLegacy;
+                      const isNeedInfo =
+                        entry.statusLabel?.toLowerCase().includes('need info') ||
+                        entry.message.includes('ขอข้อมูล');
+                      const isClosed =
+                        entry.statusLabel?.toLowerCase().includes('closed') ||
+                        entry.message.includes('ปิดงาน');
+
+                      return (
+                        <div key={idx} className="relative group">
+                          {/* Timeline Node Avatar */}
+                          <div
+                            className={`absolute -left-[31px] sm:-left-[39px] top-1.5 h-7 w-7 sm:h-8 sm:w-8 rounded-full ring-4 ring-white flex items-center justify-center text-white text-[10px] sm:text-xs font-bold shadow-xs ${
+                              isNeedInfo
+                                ? 'bg-orange-500'
+                                : isClosed
+                                  ? 'bg-emerald-500'
+                                  : 'bg-indigo-600'
+                            }`}
+                            title={`${entry.author} (${entry.statusLabel || 'Update'})`}
+                          >
+                            {isNeedInfo ? (
+                              <HelpCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                            ) : isClosed ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                            ) : (
+                              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4" aria-hidden />
+                            )}
+                          </div>
+
+                          {/* Speech Bubble / Card */}
+                          <div
+                            className={`rounded-2xl border p-3.5 sm:p-4 space-y-2 shadow-2xs transition-all ${
+                              isNeedInfo
+                                ? 'bg-orange-50/70 border-orange-200'
+                                : isClosed
+                                  ? 'bg-emerald-50/50 border-emerald-200'
+                                  : 'bg-white border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-bold text-slate-900 text-sm">
+                                  {entry.author}
+                                </span>
+                                {entry.statusLabel && (
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                                      isNeedInfo
+                                        ? 'bg-orange-100 text-orange-800 border-orange-300'
+                                        : isClosed
+                                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                          : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                    }`}
+                                  >
+                                    {entry.statusLabel}
+                                  </span>
+                                )}
+                                {isLegacy && (
+                                  <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                                    ข้อความเดิม
+                                  </span>
+                                )}
+                              </div>
+                              {entry.timestamp && (
+                                <span className="text-[11px] font-medium text-slate-400">
+                                  {entry.timestamp}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-sm">
+                              <FormattedText text={entry.message} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
