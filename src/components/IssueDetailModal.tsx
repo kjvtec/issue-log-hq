@@ -153,6 +153,13 @@ export default function IssueDetailModal({
     return unique;
   }, [issue, teamMembers, suggestedUpdaters]);
 
+  const devUploaders = useMemo(() => {
+    const list = new Set<string>();
+    teamMembers.forEach((t) => list.add(t.name));
+    quickUpdaterNames.forEach((n) => list.add(n));
+    return Array.from(list);
+  }, [teamMembers, quickUpdaterNames]);
+
   if (!isOpen || !issue) return null;
 
   const handleOpenLightbox = (index: number) => {
@@ -578,8 +585,8 @@ export default function IssueDetailModal({
             {onAddFile && onDeleteFile && (
               <DriveFilesPanel
                 files={issue.files || []}
-                uploaders={quickUpdaterNames}
-                defaultUploader={updatedBy || issue.raise_by || 'Kampon'}
+                uploaders={devUploaders}
+                defaultUploader=""
                 issueLogId={issue.log_id}
                 sourceSystem="Issue"
                 onAdd={(file) => onAddFile(issue.id, file)}

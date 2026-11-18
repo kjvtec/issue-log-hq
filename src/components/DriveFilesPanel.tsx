@@ -102,8 +102,12 @@ export default function DriveFilesPanel({
   const handleFiles = async (list: FileList | File[]) => {
     const picked = Array.from(list);
     if (picked.length === 0) return;
+    if (!configured) {
+      setError('ต้องตั้งค่า GOOGLE_* ใน Environment Variables บน Vercel ของโปรเจกต์นี้ก่อนจึงจะอัปโหลดได้');
+      return;
+    }
     if (!uploader) {
-      setError('กรุณาเลือกชื่อผู้แนบไฟล์ก่อน');
+      setError('กรุณาเลือกชื่อ Dev ผู้แนบไฟล์ก่อน');
       return;
     }
     setError(null);
@@ -115,8 +119,7 @@ export default function DriveFilesPanel({
         const prepared = await zipIfNeeded(original);
         file = prepared.file;
         if (prepared.zipped) setNotice(`แปลง ${original.name} เป็น ${file.name} ให้อัตโนมัติ`);
-        
-        // Pass sourceSystem indicator
+
         const uploaded = await uploadToDrive(
           file,
           (percent) => setBusy({ name: file.name, percent }),
@@ -142,192 +145,169 @@ export default function DriveFilesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h4 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-2">
-          <span className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center shadow-xs">
-            <HardDrive className="w-4 h-4" aria-hidden />
-          </span>
-          <span>ไฟล์แนบเอกสาร / หลักฐาน (เก็บใน Google Drive)</span>
-          <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-full px-2 py-0.5">
-            {files.length} ไฟล์
-          </span>
-        </h4>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-          ระบบ: {sourceSystem}
+      {/* Title Header matching Requirement Tracker */}
+      <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+        <span className="h-7 w-7 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600 text-white flex items-center justify-center">
+          <HardDrive className="w-4 h-4" aria-hidden />
         </span>
-      </div>
+        ไฟล์แนบจาก Dev (เก็บใน Google Drive)
+        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+          {files.length} ไฟล์
+        </span>
+      </h4>
 
+      {/* Files List */}
       {files.length > 0 && (
         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
           {files.map((f) => {
             const { icon: Icon, tone } = iconFor(f);
             return (
-              <li key={f.id} className="p-3 flex items-center justify-between gap-3 text-xs hover:bg-slate-50/70 transition-colors">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${tone}`}>
-                    <Icon className="w-4 h-4" aria-hidden />
-                  </span>
-                  <div className="min-w-0">
-                    <a
-                      href={f.web_view_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-bold text-slate-800 hover:text-indigo-600 hover:underline truncate block text-xs sm:text-sm"
-                      title={f.file_name}
-                    >
-                      {f.file_name}
-                    </a>
-                    <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2 mt-0.5">
-                      <span>{formatSize(f.file_size)}</span>
-                      <span>•</span>
-                      <span>แนบโดย {f.uploaded_by || 'ไม่ระบุ'}</span>
-                      {f.created_at && (
-                        <>
-                          <span>•</span>
-                          <span>{formatDateTime(f.created_at)}</span>
-                        </>
-                      )}
-                      {f.source_system && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                          {f.source_system}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0">
+              <li key={f.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 transition-colors">
+                <span className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${tone}`}>
+                  <Icon className="w-5 h-5" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
                   <a
                     href={f.web_view_link}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                    title="เปิดดูไฟล์ใน Google Drive"
+                    className="block text-sm font-semibold text-[#0C2553] hover:text-[#0086FF] truncate"
+                    title={f.file_name}
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    {f.file_name}
                   </a>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!confirm(`ต้องการลบไฟล์ "${f.file_name}" ใช่หรือไม่?`)) return;
-                      await onDelete(f.id);
-                    }}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                    title="ลบรายการไฟล์นี้"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="text-xs text-slate-500">
+                    {[
+                      formatSize(f.file_size),
+                      f.uploaded_by && `โดย ${f.uploaded_by}`,
+                      formatDateTime(f.created_at),
+                      f.source_system && `(${f.source_system})`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
                 </div>
+                <a
+                  href={f.web_view_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 rounded-lg text-[#0086FF] hover:bg-blue-50"
+                  title="เปิดใน Google Drive"
+                  aria-label={`เปิด ${f.file_name} ใน Google Drive`}
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`ลบลิงก์ไฟล์ "${f.file_name}" ออกจาก Issue นี้?\n(ตัวไฟล์ยังอยู่ใน Google Drive)`)) {
+                      void onDelete(f.id).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+                    }
+                  }}
+                  className="p-2 rounded-lg text-red-500 hover:bg-red-50"
+                  title="ลบลิงก์ไฟล์"
+                  aria-label={`ลบ ${f.file_name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </li>
             );
           })}
         </ul>
       )}
 
-      {/* Upload area */}
-      <div className="p-3.5 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/30 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <label className="font-bold text-slate-700">ผู้แนบไฟล์:</label>
-            <input
-              type="text"
+      {/* Compact Upload Box exactly matching Image 2 */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          void handleFiles(e.dataTransfer.files);
+        }}
+        className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
+          dragOver ? 'border-[#0086FF] bg-blue-50/50' : 'border-slate-300 bg-slate-50/60'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs sm:text-sm text-slate-600">
+            แนบโดย
+            <select
               value={uploader}
               onChange={(e) => setUploader(e.target.value)}
-              placeholder="ระบุชื่อผู้แนบ"
-              className="px-2.5 py-1 text-xs border border-slate-300 rounded-lg bg-white font-semibold outline-none focus:ring-1 focus:ring-indigo-500 w-36"
-            />
-            {uploaders.length > 0 && (
-              <select
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) setUploader(e.target.value);
-                }}
-                className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 outline-none"
-              >
-                <option value="">เลือกด่วน...</option>
-                {uploaders.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-          <span className="text-[11px] text-slate-400">
-            {configured
-              ? `ความจุสูงสุด ${Math.round((status?.maxBytes || 0) / 1024 / 1024)} MB / ไฟล์`
-              : 'ต้องตั้งค่า GOOGLE_* บนระบบก่อนจึงจะอัปโหลดได้'}
-          </span>
-        </div>
-
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            if (configured && !busy) void handleFiles(e.dataTransfer.files);
-          }}
-          onClick={() => {
-            if (configured && !busy) inputRef.current?.click();
-          }}
-          className={`rounded-xl border-2 border-dashed p-4 text-center cursor-pointer transition-all ${
-            !configured
-              ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60'
-              : dragOver
-                ? 'border-indigo-500 bg-indigo-50/80 scale-[1.01]'
-                : 'border-indigo-300/80 bg-white hover:border-indigo-500 hover:bg-indigo-50/40'
-          }`}
-        >
+              className="px-3 py-1.5 text-xs sm:text-sm border border-slate-300 rounded-lg outline-none bg-white font-semibold text-slate-800"
+              aria-label="ผู้แนบไฟล์"
+            >
+              <option value="">-- เลือก Dev --</option>
+              {uploaders.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
           <input
             ref={inputRef}
             type="file"
             multiple
             className="hidden"
             onChange={(e) => e.target.files && void handleFiles(e.target.files)}
-            disabled={!configured || !!busy}
           />
-
-          {busy ? (
-            <div className="space-y-2 py-1">
-              <div className="inline-flex items-center gap-2 text-xs font-bold text-indigo-700">
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                <span>กำลังอัปโหลด {busy.name} ({busy.percent}%)</span>
-              </div>
-              <div className="w-full max-w-xs mx-auto h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div
-                  className="h-full bg-indigo-600 transition-all duration-150"
-                  style={{ width: `${busy.percent}%` }}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              <CloudUpload className="w-6 h-6 text-indigo-500 mx-auto" />
-              <div className="text-xs font-bold text-slate-700">
-                คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่
-              </div>
-              <p className="text-[11px] text-slate-400">
-                รองรับ PDF, Excel, Word, ภาพ, Zip ฯลฯ (ไฟล์โปรแกรม .exe/.bat จะถูก Zip อัตโนมัติ)
-              </p>
-            </div>
-          )}
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => {
+              if (!configured) {
+                setError('ยังไม่ได้ตั้งค่า GOOGLE_* ใน Environment Variables ของ Vercel (โปรเจกต์ issue-log-hq) จึงยังอัปโหลดไม่ได้');
+                return;
+              }
+              if (!uploader) {
+                setError('กรุณาเลือกชื่อ Dev ในช่อง "แนบโดย" ก่อนเลือกไฟล์');
+                return;
+              }
+              inputRef.current?.click();
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#044492] hover:bg-[#0C2553] text-white text-xs sm:text-sm font-semibold rounded-lg shadow-sm transition-colors disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <CloudUpload className="w-4 h-4" aria-hidden />}
+            {busy ? 'กำลังอัปโหลด...' : 'เลือกไฟล์เพื่ออัปโหลด'}
+          </button>
+          <span className="text-xs text-slate-500">
+            หรือลากไฟล์มาวางที่นี่ (ไฟล์โปรแกรม/สคริปต์ เช่น .exe จะถูกบีบเป็น .zip ให้อัตโนมัติ)
+            {status?.maxBytes ? ` (ไฟล์ละไม่เกิน ${Math.round(status.maxBytes / 1024 / 1024)} MB)` : ' (ไฟล์ละไม่เกิน 100 MB)'}
+          </span>
         </div>
 
-        {notice && (
-          <p className="text-xs font-medium text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
-            ℹ️ {notice}
-          </p>
-        )}
-        {error && (
-          <p className="text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">
-            ⚠️ {error}
-          </p>
+        {busy && (
+          <div className="mt-3">
+            <div className="flex justify-between text-xs font-medium text-slate-600 mb-1">
+              <span className="truncate pr-2">{busy.name}</span>
+              <span>{busy.percent}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all"
+                style={{ width: `${busy.percent}%` }}
+              />
+            </div>
+          </div>
         )}
       </div>
+
+      {notice && (
+        <p className="text-xs font-medium text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+          {notice}
+        </p>
+      )}
+
+      {error && (
+        <p role="alert" className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+          ⚠️ {error}
+        </p>
+      )}
     </div>
   );
 }
