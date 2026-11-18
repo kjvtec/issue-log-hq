@@ -164,7 +164,23 @@ export interface Issue {
   created_at?: string;
   updated_at?: string;
   images?: IssueImage[];
+  files?: IssueFile[];
 }
+
+export interface IssueFile {
+  id: string;
+  issue_id: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string | null;
+  drive_file_id: string;
+  web_view_link: string;
+  uploaded_by: string;
+  source_system?: string;
+  created_at?: string;
+}
+
+export type NewFile = Omit<IssueFile, 'id' | 'issue_id' | 'created_at'>;
 
 export interface TeamMember {
   id: number;

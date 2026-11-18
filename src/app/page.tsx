@@ -20,6 +20,8 @@ import {
 import {
   Issue,
   IssueImage,
+  IssueFile,
+  NewFile,
   PriorityType,
   StatusType,
   TeamMember,
@@ -243,13 +245,26 @@ export default function HomePage() {
     []
   );
 
+  const ISSUE_FILES_EMBED = 'files:issue_files(id, issue_id, file_name, file_size, mime_type, drive_file_id, web_view_link, uploaded_by, source_system, created_at)';
+  const ISSUE_IMAGES_EMBED = 'images:issue_images(id, issue_id, file_url, file_name, file_size)';
+
   // Fast issue-only refresh (used after mutations or fallback resync)
   const fetchIssuesOnly = useCallback(async () => {
     if (!isSupabaseConfigured) return;
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('issues')
-      .select('*, images:issue_images(id, issue_id, file_url, file_name, file_size)')
+      .select(`*, ${ISSUE_IMAGES_EMBED}, ${ISSUE_FILES_EMBED}`)
       .order('created_at', { ascending: false });
+
+    // Fallback if issue_files table does not exist yet
+    if (error) {
+      const basicRes = await supabase
+        .from('issues')
+        .select(`*, ${ISSUE_IMAGES_EMBED}`)
+        .order('created_at', { ascending: false });
+      data = basicRes.data;
+      error = basicRes.error;
+    }
 
     if (error) throw error;
     if (data && data.length > 0) {
@@ -274,10 +289,17 @@ export default function HomePage() {
 
     try {
       const includeMetadata = !metadataLoadedRef.current;
-      const issuesPromise = supabase
-        .from('issues')
-        .select('*, images:issue_images(id, issue_id, file_url, file_name, file_size)')
-        .order('created_at', { ascending: false });
+      const queryIssues = async () => {
+        const full = await supabase
+          .from('issues')
+          .select(`*, ${ISSUE_IMAGES_EMBED}, ${ISSUE_FILES_EMBED}`)
+          .order('created_at', { ascending: false });
+        if (!full.error) return full;
+        return supabase
+          .from('issues')
+          .select(`*, ${ISSUE_IMAGES_EMBED}`)
+          .order('created_at', { ascending: false });
+      };
 
       const [modulesRes, teamRes, issuesRes] = await Promise.all([
         includeMetadata
@@ -286,7 +308,7 @@ export default function HomePage() {
         includeMetadata
           ? supabase.from('team_members').select('id, name, role').order('name')
           : Promise.resolve({ data: null }),
-        issuesPromise,
+        queryIssues(),
       ]);
 
       const dbHasCoreCol =
@@ -475,11 +497,20 @@ export default function HomePage() {
       }
 
       if (savedIssueId && !savedIssueId.startsWith('legacy-') && !savedIssueId.startsWith('local-')) {
-        const { data: freshRow } = await supabase
+        let { data: freshRow } = await supabase
           .from('issues')
-          .select('*, images:issue_images(id, issue_id, file_url, file_name, file_size)')
+          .select(`*, ${ISSUE_IMAGES_EMBED}, ${ISSUE_FILES_EMBED}`)
           .eq('id', savedIssueId)
           .single();
+
+        if (!freshRow) {
+          const basic = await supabase
+            .from('issues')
+            .select(`*, ${ISSUE_IMAGES_EMBED}`)
+            .eq('id', savedIssueId)
+            .single();
+          freshRow = basic.data;
+        }
 
         if (freshRow) {
           const normalizedRow: Issue = {
@@ -532,8 +563,9 @@ export default function HomePage() {
   };
 
   // Quick Status Change (optimistic update for instant UI feedback)
-  const handleStatusChange = async (issueId: string, newStatus: StatusType) => {
-    const closedDate = newStatus === 'Closed' ? new Date().toISOString() : undefined;
+  const handleStatusChange = async (issueId: string, newStatus: StatusType, closedBy?: string) => {
+    const isClosed = newStatus === 'Closed';
+    const closedDate = isClosed ? new Date().toISOString() : undefined;
 
     setIssues((prev) => {
       const next = prev.map((i) =>
@@ -541,7 +573,8 @@ export default function HomePage() {
           ? {
               ...i,
               status: newStatus,
-              closed_date: closedDate ?? i.closed_date,
+              closed_date: isClosed ? (closedDate ?? i.closed_date) : i.closed_date,
+              closed_by: isClosed ? (closedBy || i.closed_by || 'Kampon') : i.closed_by,
             }
           : i
       );
@@ -551,17 +584,102 @@ export default function HomePage() {
 
     if (selectedIssue && selectedIssue.id === issueId) {
       setSelectedIssue((prev) =>
-        prev ? { ...prev, status: newStatus, closed_date: closedDate ?? prev.closed_date } : null
+        prev
+          ? {
+              ...prev,
+              status: newStatus,
+              closed_date: isClosed ? (closedDate ?? prev.closed_date) : prev.closed_date,
+              closed_by: isClosed ? (closedBy || prev.closed_by || 'Kampon') : prev.closed_by,
+            }
+          : null
       );
     }
 
     if (isSupabaseConfigured && !issueId.startsWith('legacy-') && !issueId.startsWith('local-')) {
       const updates: Record<string, unknown> = { status: newStatus };
       if (closedDate) updates.closed_date = closedDate;
+      if (isClosed && closedBy) updates.closed_by = closedBy;
       const { error } = await supabase.from('issues').update(updates).eq('id', issueId);
       if (error) {
         await fetchIssuesOnly();
       }
+    }
+  };
+
+  // Google Drive Files Handlers
+  const handleAddFile = async (issueId: string, file: NewFile) => {
+    if (!isSupabaseConfigured) return;
+
+    const payload = {
+      issue_id: issueId,
+      file_name: file.file_name,
+      file_size: file.file_size || 0,
+      mime_type: file.mime_type || null,
+      drive_file_id: file.drive_file_id,
+      web_view_link: file.web_view_link,
+      uploaded_by: file.uploaded_by || '',
+      source_system: file.source_system || 'Issue Tracker',
+    };
+
+    const { data, error } = await supabase
+      .from('issue_files')
+      .insert(payload)
+      .select('id, issue_id, file_name, file_size, mime_type, drive_file_id, web_view_link, uploaded_by, source_system, created_at')
+      .single();
+
+    if (error) {
+      console.error('Failed to save issue file in DB:', error);
+      alert('บันทึกข้อมูลไฟล์ในระบบไม่สำเร็จ (กรุณาตรวจสอบว่าได้รัน migration_v3_issue_files.sql ใน Supabase หรือยัง)');
+      return;
+    }
+
+    const savedFile = data as IssueFile;
+
+    setIssues((prev) => {
+      const next = prev.map((item) =>
+        item.id === issueId
+          ? { ...item, files: [...(item.files || []), savedFile] }
+          : item
+      );
+      writeSnapshotCache({ issues: next });
+      return next;
+    });
+
+    if (selectedIssue && selectedIssue.id === issueId) {
+      setSelectedIssue((prev) =>
+        prev ? { ...prev, files: [...(prev.files || []), savedFile] } : null
+      );
+    }
+  };
+
+  const handleDeleteFile = async (fileId: string) => {
+    if (!isSupabaseConfigured) return;
+
+    const { error } = await supabase.from('issue_files').delete().eq('id', fileId);
+    if (error) {
+      console.error('Failed to delete issue file:', error);
+      alert('ลบไฟล์ไม่สำเร็จ');
+      return;
+    }
+
+    setIssues((prev) => {
+      const next = prev.map((item) => ({
+        ...item,
+        files: (item.files || []).filter((f) => f.id !== fileId),
+      }));
+      writeSnapshotCache({ issues: next });
+      return next;
+    });
+
+    if (selectedIssue) {
+      setSelectedIssue((prev) =>
+        prev
+          ? {
+              ...prev,
+              files: (prev.files || []).filter((f) => f.id !== fileId),
+            }
+          : null
+      );
     }
   };
 
@@ -1340,6 +1458,8 @@ export default function HomePage() {
           onDelete={handleProtectedDeleteRequest}
           onStatusChange={handleStatusChange}
           onUpdateIssue={handleInlineUpdateIssue}
+          onAddFile={handleAddFile}
+          onDeleteFile={handleDeleteFile}
           teamMembers={teamMembers}
           suggestedUpdaters={knownUpdaters}
         />

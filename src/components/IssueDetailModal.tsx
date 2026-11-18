@@ -43,6 +43,8 @@ import {
 import { getStatusBadgeClass } from '@/lib/status';
 import LightboxModal from './LightboxModal';
 import ImageUploader from './ImageUploader';
+import DriveFilesPanel from './DriveFilesPanel';
+import type { NewFile } from '@/types';
 
 interface IssueDetailModalProps {
   isOpen: boolean;
@@ -50,8 +52,10 @@ interface IssueDetailModalProps {
   issue: Issue | null;
   onEdit: (issue: Issue) => void;
   onDelete: (issueId: string) => Promise<void>;
-  onStatusChange: (issueId: string, newStatus: StatusType) => Promise<void>;
+  onStatusChange: (issueId: string, newStatus: StatusType, closedBy?: string) => Promise<void>;
   onUpdateIssue: (issueId: string, updates: Partial<Issue>, images: IssueImage[]) => Promise<void>;
+  onAddFile?: (issueId: string, file: NewFile) => Promise<void>;
+  onDeleteFile?: (fileId: string) => Promise<void>;
   teamMembers: TeamMember[];
   suggestedUpdaters?: string[];
 }
@@ -64,6 +68,8 @@ export default function IssueDetailModal({
   onDelete,
   onStatusChange,
   onUpdateIssue,
+  onAddFile,
+  onDeleteFile,
   teamMembers,
   suggestedUpdaters = [],
 }: IssueDetailModalProps) {
@@ -210,7 +216,7 @@ export default function IssueDetailModal({
         updates.status = targetStatus;
         if (targetStatus === 'Closed') {
           if (!updates.closed_by) {
-            updates.closed_by = trimmedAuthor || 'Kampon';
+            updates.closed_by = closedBy || trimmedAuthor || 'Kampon';
           }
           updates.closed_date = new Date().toISOString();
         }
@@ -248,7 +254,11 @@ export default function IssueDetailModal({
     }
     setIsUpdatingStatus(true);
     try {
-      await onStatusChange(issue.id, status);
+      const activeClosedBy = status === 'Closed' ? (closedBy || updatedBy.trim() || 'Kampon') : undefined;
+      await onStatusChange(issue.id, status, activeClosedBy);
+      if (status === 'Closed' && activeClosedBy) {
+        setClosedBy(activeClosedBy);
+      }
     } finally {
       setIsUpdatingStatus(false);
     }
@@ -564,6 +574,19 @@ export default function IssueDetailModal({
               </div>
             </div>
 
+            {/* Google Drive Files Panel */}
+            {onAddFile && onDeleteFile && (
+              <DriveFilesPanel
+                files={issue.files || []}
+                uploaders={quickUpdaterNames}
+                defaultUploader={updatedBy || issue.raise_by || 'Kampon'}
+                issueLogId={issue.log_id}
+                sourceSystem="Issue"
+                onAdd={(file) => onAddFile(issue.id, file)}
+                onDelete={onDeleteFile}
+              />
+            )}
+
             {/* TIMELINE / CONVERSATION HISTORY SECTION */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -687,9 +710,6 @@ export default function IssueDetailModal({
                         ? `ตอบกลับข้อมูลเพิ่มเติม / อัปเดต (${issue.raise_by} เจ้าของ Case)`
                         : 'อัปเดตข้อมูล / ขอข้อมูลเพิ่ม / บันทึกผลการแก้ไข (Inline Update)'}
                     </h3>
-                    <p className="text-xs text-slate-500">
-                      ระบุชื่อผู้อัปเดตเองได้อิสระ ข้อความใหม่จะเพิ่มต่อใน Timeline โดยคงผู้รับผิดชอบเป็น {issue.raise_by} เหมือนเดิม
-                    </p>
                   </div>
                 </div>
 
@@ -766,6 +786,16 @@ export default function IssueDetailModal({
                 )}
               </div>
 
+              {/* Add More Images (ImageUploader with Ctrl+V) - Positioned above message textarea */}
+              <div className="bg-white p-3.5 rounded-xl border border-slate-200">
+                <ImageUploader
+                  images={newImages}
+                  onChange={setNewImages}
+                  issueLogId={issue.log_id}
+                  title="แนบรูปภาพเพิ่มเติม (ถ้ามี)"
+                />
+              </div>
+
               {/* New Update Message Textarea */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -786,16 +816,6 @@ export default function IssueDetailModal({
                       : 'ระบุสิ่งที่ต้องการขอข้อมูลเพิ่มจากผู้เปิด Case หรือรายละเอียดการแก้ไข (จะเพิ่มเป็นรายการใหม่ใน Timeline)...'
                   }
                   className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none bg-white leading-relaxed"
-                />
-              </div>
-
-              {/* Add More Images (ImageUploader with Ctrl+V) */}
-              <div className="bg-white p-3.5 rounded-xl border border-slate-200">
-                <ImageUploader
-                  images={newImages}
-                  onChange={setNewImages}
-                  issueLogId={issue.log_id}
-                  title="แนบรูปภาพเพิ่มเติม (ถ้ามี)"
                 />
               </div>
 
@@ -955,7 +975,8 @@ export default function IssueDetailModal({
               <button
                 disabled={isUpdatingStatus || isSaving || issue.status === 'Closed'}
                 onClick={() => {
-                  if (!closedBy) setClosedBy('Kampon');
+                  const resolvedClosedBy = closedBy || updatedBy.trim() || 'Kampon';
+                  setClosedBy(resolvedClosedBy);
                   handleQuickStatus('Closed');
                 }}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"

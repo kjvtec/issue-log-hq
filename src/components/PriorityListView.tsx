@@ -509,17 +509,28 @@ export default function PriorityListView({
                                 </p>
                               </div>
 
-                              {/* Reporter */}
+                              {/* Reporter & Closed By */}
                               <div
-                                className="md:col-span-1 flex items-center gap-1 text-[11px] text-slate-600 truncate"
+                                className="md:col-span-1 flex flex-col justify-center text-[11px] text-slate-600 leading-tight min-w-0"
                                 title={
                                   issue.raise_date
-                                    ? `แจ้งเมื่อ ${new Date(issue.raise_date).toLocaleDateString('th-TH')}`
-                                    : ''
+                                    ? `แจ้งเมื่อ ${new Date(issue.raise_date).toLocaleDateString('th-TH')}${issue.closed_by ? ` • ปิดโดย: ${issue.closed_by}` : ''}`
+                                    : (issue.closed_by ? `ปิดโดย: ${issue.closed_by}` : '')
                                 }
                               >
-                                <User className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span className="truncate">{issue.raise_by}</span>
+                                <div className="flex items-center gap-1 truncate">
+                                  <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span className="truncate">{issue.raise_by}</span>
+                                </div>
+                                {isClosed && (
+                                  <div
+                                    className="flex items-center gap-0.5 text-[10px] font-bold text-emerald-700 truncate mt-0.5"
+                                    title={`ผู้ปิด Issue: ${issue.closed_by || '-'}`}
+                                  >
+                                    <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                    <span className="truncate">ปิด: {issue.closed_by || '-'}</span>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Desktop Status */}
