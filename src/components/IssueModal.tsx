@@ -15,6 +15,7 @@ import {
   SystemModule,
 } from '@/types';
 import ImageUploader from './ImageUploader';
+import RichTextarea from './RichTextarea';
 
 interface IssueModalProps {
   isOpen: boolean;
@@ -199,7 +200,7 @@ export default function IssueModal({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[94vh] flex flex-col overflow-hidden border border-slate-200">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/80">
           <div className="flex items-center gap-3">
@@ -438,16 +439,17 @@ export default function IssueModal({
 
           {/* Details */}
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Details (รายละเอียดปัญหา / อาการที่พบ) *
             </label>
-            <textarea
-              rows={4}
+            <RichTextarea
               value={details}
-              onChange={(e) => setDetails(e.target.value)}
+              onChange={setDetails}
               required
-              placeholder="อธิบายขั้นตอนที่ทำให้เกิดปัญหา หรือข้อความ Error ที่แสดง..."
-              className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none leading-relaxed"
+              rows={6}
+              minHeight="150px"
+              placeholder="อธิบายขั้นตอนที่ทำให้เกิดปัญหา หรือข้อความ Error ที่แสดง... (รองรับตัวหนา ลิสต์ แปะลิงก์ URL อัตโนมัติ)"
+              theme="indigo"
             />
           </div>
 

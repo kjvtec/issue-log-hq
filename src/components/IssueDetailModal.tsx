@@ -662,8 +662,8 @@ export default function IssueDetailModal({
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
                 รายละเอียดปัญหา (Details)
               </h3>
-              <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200 text-sm leading-relaxed text-slate-800 whitespace-pre-wrap font-sans">
-                {issue.details}
+              <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200 text-sm leading-relaxed text-slate-800 font-sans">
+                <FormattedText text={issue.details} />
               </div>
             </div>
 
