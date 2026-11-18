@@ -954,21 +954,13 @@ export default function HomePage() {
                   href={REQUIREMENT_TRACKER_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="relative inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-[#0C2553] via-[#044492] to-[#0086FF] hover:from-[#081b3d] hover:to-[#0074e0] pulse-glow-blue hover:scale-[1.03] active:scale-95 transition-all duration-200 overflow-hidden group border border-[#0086FF]/40 shadow-sm"
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-indigo-50/80 hover:bg-indigo-100 text-[#044492] rounded-xl text-xs sm:text-sm font-bold border border-indigo-200/80 shadow-2xs transition-all hover:scale-[1.02] active:scale-95"
                   title="เปิด Requirement Tracker (https://jiffy-requirement-tracker.vercel.app/)"
                 >
-                  {/* Light shimmer sweep effect */}
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -skew-x-12 animate-btn-shimmer pointer-events-none"
-                  />
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFCB06] opacity-90"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFCB06]"></span>
-                  </span>
-                  <ClipboardList className="w-4 h-4 text-[#FFCB06] relative transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" aria-hidden />
-                  <span className="relative tracking-wide">Requirement Tracker</span>
-                  <ExternalLink className="w-3.5 h-3.5 text-white/90 relative hidden sm:inline-block" aria-hidden />
+                  <ClipboardList className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="hidden sm:inline">Requirement Tracker</span>
+                  <span className="sm:hidden">Requirements</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
                 </a>
 
                 <a
