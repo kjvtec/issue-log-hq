@@ -15,6 +15,7 @@ import {
   Globe,
   X,
   ListOrdered,
+  ClipboardList,
 } from 'lucide-react';
 import {
   Issue,
@@ -53,6 +54,9 @@ const PriorityListView = dynamic(() => import('@/components/PriorityListView'), 
 const IssueModal = dynamic(() => import('@/components/IssueModal'));
 const IssueDetailModal = dynamic(() => import('@/components/IssueDetailModal'));
 const DeleteGuardOverlay = dynamic(() => import('@/components/DeleteGuardOverlay'));
+
+const REQUIREMENT_TRACKER_URL =
+  process.env.NEXT_PUBLIC_REQUIREMENT_TRACKER_URL || 'https://jiffy-requirement-tracker.vercel.app/';
 
 const SNAPSHOT_CACHE_KEY = 'jiffy_issue_snapshot_v1';
 
@@ -944,8 +948,29 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {/* Action Buttons: Cloud HQ (Dev) + Jiffy Yellow CTA */}
+              {/* Action Buttons: Requirement Tracker + Cloud HQ (Dev) + Jiffy Yellow CTA */}
               <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                <a
+                  href={REQUIREMENT_TRACKER_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-white bg-gradient-to-r from-[#0C2553] via-[#044492] to-[#0086FF] hover:from-[#081b3d] hover:to-[#0074e0] pulse-glow-blue hover:scale-[1.03] active:scale-95 transition-all duration-200 overflow-hidden group border border-[#0086FF]/40 shadow-sm"
+                  title="เปิด Requirement Tracker (https://jiffy-requirement-tracker.vercel.app/)"
+                >
+                  {/* Light shimmer sweep effect */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/35 to-transparent -skew-x-12 animate-btn-shimmer pointer-events-none"
+                  />
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FFCB06] opacity-90"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#FFCB06]"></span>
+                  </span>
+                  <ClipboardList className="w-4 h-4 text-[#FFCB06] relative transition-transform duration-200 group-hover:rotate-12 group-hover:scale-110" aria-hidden />
+                  <span className="relative tracking-wide">Requirement Tracker</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-white/90 relative hidden sm:inline-block" aria-hidden />
+                </a>
+
                 <a
                   href="https://ras-dev.pttrm.com/backoffice/"
                   target="_blank"
