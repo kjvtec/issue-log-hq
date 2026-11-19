@@ -17,6 +17,7 @@ import {
   ChevronUp,
   BarChart3,
   PieChart as PieChartIcon,
+  LayoutList,
   Activity,
   HelpCircle,
   Send,
@@ -104,7 +105,7 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const [manualCore, setManualCore] = useState<CoreFunctionType | null>(null);
   const [urgentCollapsed, setUrgentCollapsed] = useState(false);
-  const [moduleChartMode, setModuleChartMode] = useState<'bar' | 'pie'>('bar');
+  const [moduleChartMode, setModuleChartMode] = useState<'bar' | 'pie' | 'list'>('bar');
   // Statistics Calculations
   const stats = useMemo(() => {
     const total = issues.length;
@@ -1206,7 +1207,7 @@ export default function DashboardView({
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Bar / Pie Chart View Toggle */}
+                {/* Bar / Pie / List View Toggle */}
                 <div className="inline-flex items-center p-0.5 rounded-lg bg-[#E5F1FF]/80 border border-[#CFE4FF]">
                   <button
                     type="button"
@@ -1232,6 +1233,18 @@ export default function DashboardView({
                     <PieChartIcon className="w-3.5 h-3.5" />
                     กราฟวงกลม
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setModuleChartMode('list')}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                      moduleChartMode === 'list'
+                        ? 'bg-white text-[#044492] shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <LayoutList className="w-3.5 h-3.5" />
+                    List
+                  </button>
                 </div>
 
                 <button
@@ -1249,8 +1262,104 @@ export default function DashboardView({
               </div>
             </div>
 
-            {/* Active Sub-modules with issues — 4 per row grid */}
+            {/* Active Sub-modules with issues — 4 per row grid or List View */}
             {activeCoreData.subModules.filter((m) => m.total > 0).length > 0 ? (
+              moduleChartMode === 'list' ? (
+                <div className="rounded-2xl border border-slate-200/90 bg-white overflow-hidden shadow-xs divide-y divide-slate-100">
+                  <div className="hidden sm:grid sm:grid-cols-12 gap-3 px-4 py-2 bg-slate-50/90 text-[11px] font-bold text-slate-500">
+                    <div className="col-span-4">ชื่อกลุ่มย่อย (Sub-module)</div>
+                    <div className="col-span-2">สถานะ</div>
+                    <div className="col-span-3">ความคืบหน้า</div>
+                    <div className="col-span-3 text-right">สรุปจำนวนเรื่อง</div>
+                  </div>
+                  {activeCoreData.subModules
+                    .filter((m) => m.total > 0)
+                    .map((item, idx) => {
+                      const closedPercent = item.percentClosed;
+                      const openPercent = 100 - closedPercent;
+
+                      return (
+                        <div
+                          key={item.name}
+                          onClick={() => onFilterByModule(item.name, activeCoreData.core)}
+                          className="group grid grid-cols-1 sm:grid-cols-12 gap-2.5 sm:gap-3 items-center px-4 py-3 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                        >
+                          {/* Sub-module Name & Priority Badge */}
+                          <div className="sm:col-span-4 flex items-center gap-2 min-w-0">
+                            <span className="w-5 h-5 rounded-md bg-slate-100 group-hover:bg-indigo-100 text-slate-600 group-hover:text-indigo-700 text-[11px] font-extrabold inline-flex items-center justify-center shrink-0 transition-colors">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs sm:text-sm text-slate-900 font-extrabold group-hover:text-indigo-600 transition-colors truncate">
+                              {item.name}
+                            </span>
+                            {item.highOpen > 0 && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200 shrink-0">
+                                <Flame className="w-2.5 h-2.5 text-red-500" />
+                                {item.highOpen} High
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="sm:col-span-2 flex items-center">
+                            {closedPercent === 100 ? (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                ✓ ปิดครบ 100%
+                              </span>
+                            ) : closedPercent > 0 ? (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                สำเร็จ {closedPercent}%
+                              </span>
+                            ) : (
+                              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                รอแก้ไข {item.open}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="sm:col-span-3 flex items-center gap-2.5">
+                            <div className="relative flex-1 bg-slate-200/80 rounded-full h-2.5 p-0.5 overflow-hidden flex shadow-inner">
+                              {item.closed > 0 && (
+                                <div
+                                  className="bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 h-full rounded-l-full transition-all duration-700"
+                                  style={{ width: `${closedPercent}%` }}
+                                  title={`ปิดแล้ว: ${item.closed} (${closedPercent}%)`}
+                                />
+                              )}
+                              {item.open > 0 && (
+                                <div
+                                  className={`bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 h-full transition-all duration-700 ${
+                                    item.closed === 0 ? 'rounded-full' : 'rounded-r-full'
+                                  }`}
+                                  style={{ width: `${openPercent}%` }}
+                                  title={`ค้าง: ${item.open} (${openPercent}%)`}
+                                />
+                              )}
+                            </div>
+                            <span className="text-[11px] font-extrabold text-slate-700 w-9 text-right shrink-0">
+                              {closedPercent}%
+                            </span>
+                          </div>
+
+                          {/* Counts & Action */}
+                          <div className="sm:col-span-3 flex items-center justify-between sm:justify-end gap-3 text-[11px]">
+                            <span className="font-semibold text-slate-600">
+                              <b className="text-emerald-600">{item.closed}</b> ปิด
+                            </span>
+                            <span className="font-semibold text-slate-600">
+                              <b className="text-amber-600">{item.open}</b> ค้าง
+                            </span>
+                            <span className="font-extrabold text-slate-800 bg-slate-100 group-hover:bg-white px-2 py-0.5 rounded-md border border-slate-200 min-w-[2.25rem] text-center">
+                              {item.total}
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all shrink-0" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 {activeCoreData.subModules
                   .filter((m) => m.total > 0)
@@ -1405,6 +1514,7 @@ export default function DashboardView({
                     );
                   })}
               </div>
+              )
             ) : (
               <div className="p-5 rounded-xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-2">
                 <p className="text-xs font-semibold text-slate-600">
