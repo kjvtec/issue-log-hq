@@ -105,7 +105,7 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const [manualCore, setManualCore] = useState<CoreFunctionType | null>(null);
   const [urgentCollapsed, setUrgentCollapsed] = useState(false);
-  const [moduleChartMode, setModuleChartMode] = useState<'bar' | 'pie' | 'list'>('bar');
+  const [moduleChartMode, setModuleChartMode] = useState<'bar' | 'pie' | 'list'>('list');
   // Statistics Calculations
   const stats = useMemo(() => {
     const total = issues.length;
